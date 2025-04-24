@@ -83,6 +83,8 @@ void main() {
 }
 
 class AgenciaApp extends StatelessWidget {
+  const AgenciaApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -310,25 +312,51 @@ agents:
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Agencia agents", style: TextStyle(color: Colors.white)),
-              ElevatedButton(
-                onPressed: () async {
-                  final bytes = Uint8List.fromList(
-                    utf8.encode(specController.text),
-                  );
-                  await FileSaver.instance.saveFile(
-                    name: "agencia",
-                    bytes: bytes,
-                    ext: "yaml",
-                    mimeType: MimeType.text,
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  minimumSize: Size(0, 0),
-                ),
-                child: Text("Save"),
+              Text("Agencia {{A}}", style: TextStyle(color: Colors.white)),
+              Row(
+                children: [
+                  ElevatedButton(
+                    onPressed: () async {
+                      final bytes = Uint8List.fromList(
+                        utf8.encode(specController.text),
+                      );
+                      await FileSaver.instance.saveFile(
+                        name: "agencia",
+                        bytes: bytes,
+                        ext: "yaml",
+                        mimeType: MimeType.text,
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      minimumSize: Size(0, 0),
+                    ),
+                    child: Text("Save"),
+                  ),
+                  SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => SpecEditorPage(specController.text),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      minimumSize: Size(0, 0),
+                    ),
+                    child: Text("Edit"),
+                  ),
+                ],
               ),
             ],
           ),
@@ -375,6 +403,51 @@ agents:
           ),
         ],
       ),
+    );
+  }
+}
+
+class SpecEditorPage extends StatelessWidget {
+  final String spec;
+
+  SpecEditorPage(this.spec, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = SyntaxHighlightController()..text = spec;
+
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        iconTheme: IconThemeData(color: Colors.white),
+        title: Text("Edit {{A}}"),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Scrollbar(
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            child: TextField(
+              controller: controller,
+              maxLines: null,
+              style: TextStyle(
+                fontSize: 16,
+                fontFamily: 'Courier New',
+                color: Colors.white,
+              ),
+              cursorColor: Colors.white,
+              decoration: InputDecoration.collapsed(hintText: null),
+              scrollPadding: EdgeInsets.all(20),
+              enableInteractiveSelection: true,
+              selectionControls: materialTextSelectionControls,
+            ),
+          ),
+        ),
+      ),
+      backgroundColor: Colors.black,
     );
   }
 }
