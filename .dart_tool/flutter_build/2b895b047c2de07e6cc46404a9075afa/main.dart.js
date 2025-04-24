@@ -35769,8 +35769,8 @@ q=!1}}}}return A.bI(f,a1,h)}}
 A.DR.prototype={
 O(a){var s=null,r=A.Wp(s,s,B.j9,s,s,s,s,s,s,B.k,s,s,s,s,s,s,s,s,s),q=A.ay1(new A.fq(4,B.cd,B.eJ),B.k,!0)
 q=A.re(A.alT(s,s,B.i3,s,1,s,s,s,B.ja,s,s,s,s,A.cT(s,s,B.k,s,s,s,s,s,s,s,s,20,s,s,B.U,s,s,!0,s,s,s,s,s,s,s,s),s,s),B.a0,s,new A.pA(r),q,B.i3,s)
-r=A.dT("Agencia",s,s,s,s,s,s)
-return new A.wz(new A.xU(new A.ua(r,new A.O8(s,s,1/0,56),s),new A.tW(s),s),"Agencia",q,s)}}
+r=A.dT("Agencia {{A}}",s,s,s,s,s,s)
+return new A.wz(new A.xU(new A.ua(r,new A.O8(s,s,1/0,56),s),new A.tW(s),s),"{{A}}",q,s)}}
 A.tW.prototype={
 ao(){var s=$.am(),r=new A.Jf(B.jT,s)
 r.q1(B.jT.ru(B.aW,B.eu,"agents:\n  greet:\n    template: |\n      Hello, {{ .Input }}!\n"))
