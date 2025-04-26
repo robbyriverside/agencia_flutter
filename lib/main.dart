@@ -88,13 +88,13 @@ class AgenciaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '{{A}}',
+      title: '{{Ai}}',
       theme: ThemeData(
-        scaffoldBackgroundColor: Colors.blue[900],
+        scaffoldBackgroundColor: Color(0xFFE0F7F1),
         brightness: Brightness.light,
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.lightBlueAccent,
+            backgroundColor: Color(0xFF8B2500), // Deep rust / Spanish tile
             foregroundColor: Colors.white,
           ),
         ),
@@ -104,7 +104,7 @@ class AgenciaApp extends StatelessWidget {
           border: OutlineInputBorder(),
         ),
         appBarTheme: AppBarTheme(
-          backgroundColor: Colors.blue[900],
+          backgroundColor: Color(0xFF2E7D32),
           elevation: 1,
           shadowColor: Colors.grey,
           titleTextStyle: TextStyle(
@@ -115,7 +115,28 @@ class AgenciaApp extends StatelessWidget {
         ),
       ),
       home: Scaffold(
-        appBar: AppBar(title: Text('Agencia {{A}}')),
+        appBar: PreferredSize(
+          preferredSize: Size.fromHeight(kToolbarHeight),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFF4CAF50), // Lighter green
+                  Color(0xFF2E7D32), // Darker green (center)
+                  Color(0xFF4CAF50), // Lighter green
+                ],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                stops: [0.0, 0.5, 1.0],
+              ),
+            ),
+            child: AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              title: Text('Agencia {{Ai}}'),
+            ),
+          ),
+        ),
         body: AgenciaForm(),
       ),
     );
@@ -128,25 +149,32 @@ class AgenciaForm extends StatefulWidget {
 }
 
 class _AgenciaFormState extends State<AgenciaForm> {
-  final specController =
-      SyntaxHighlightController()
-        ..text = '''
-agents:
-  greet:
-    template: |
-      Hello, {{ .Input }}!
-''';
+  late TextEditingController specController;
   final inputController = TextEditingController(text: 'world');
   final agentController = TextEditingController(text: 'greet');
   String outputText = '';
   String errorText = '';
   final FocusNode specFocusNode = FocusNode();
+  final ScrollController specScrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    specController = TextEditingController(
+      text: '''
+agents:
+  greet:
+    template: |
+      Hello, {{ .Input }}!
+''',
+    );
+  }
 
   void showProgressDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black.withValues(alpha: 0.5),
+      barrierColor: Colors.black.withOpacity(0.5),
       builder: (BuildContext context) {
         return Center(
           child: Container(
@@ -221,54 +249,103 @@ agents:
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Input", style: TextStyle(color: Colors.white)),
+          Text("Input", style: TextStyle(color: Colors.black)),
+          SizedBox(height: 8),
           TextField(
             controller: inputController,
             maxLines: 2,
             decoration: InputDecoration(border: OutlineInputBorder()),
           ),
           SizedBox(height: 12),
-          Text("Starting Agent", style: TextStyle(color: Colors.white)),
           Row(
+            mainAxisAlignment: MainAxisAlignment.start,
             children: [
-              SizedBox(
-                width: MediaQuery.of(context).size.width * 0.45,
-                child: TextField(
-                  controller: agentController,
-                  maxLines: 1,
-                  decoration: InputDecoration(border: OutlineInputBorder()),
-                ),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Starting Agent", style: TextStyle(color: Colors.black)),
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: MediaQuery.of(context).size.width * 0.45,
+                        child: TextField(
+                          controller: agentController,
+                          maxLines: 1,
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 6),
+                      ElevatedButton(
+                        onPressed: runAgent,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(
+                            0xFF8B2500,
+                          ), // Deep rust / Spanish tile
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 28,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 6,
+                          shadowColor: Colors.black54,
+                        ).copyWith(
+                          padding: WidgetStateProperty.all(
+                            EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                          ),
+                          alignment: Alignment.center,
+                        ),
+                        child: Text(
+                          "Run",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                    ],
+                  ),
+                ],
               ),
-              SizedBox(width: 6),
-              ElevatedButton(
-                onPressed: runAgent,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 6,
-                  shadowColor: Colors.black54,
-                ).copyWith(
-                  padding: WidgetStateProperty.all(
-                    EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                  ),
+              // Agencia symbol to the right of Run button
+              Expanded(
+                child: Container(
                   alignment: Alignment.center,
-                ),
-                child: Text(
-                  "Run",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Color(0xFF2E7D32), width: 1.5),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      " Agentic {{Ai}} Designer ", // TODO: text changes when width too small
+                      style: TextStyle(
+                        // fontWeight: FontWeight.bold,
+                        color: Color(0xFF2E7D32),
+                        fontSize: 32,
+                        fontFamily: 'comic sans',
+                      ),
+                    ),
+                  ),
                 ),
               ),
+
+              SizedBox(width: 8),
             ],
           ),
           SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Output", style: TextStyle(color: Colors.white)),
+              Text("Output", style: TextStyle(color: Colors.black)),
               ElevatedButton(
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: outputText));
@@ -277,11 +354,18 @@ agents:
                   );
                 },
                 style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(
+                    0xFFA64521,
+                  ), // Slightly brighter rust tone
+                  foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   minimumSize: Size(0, 0),
                 ),
-                child: Text("Copy Output"),
+                child: Text(
+                  "Copy Output",
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
             ],
           ),
@@ -293,14 +377,26 @@ agents:
                   height: 120,
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey),
-                    color: Colors.white,
+                    color: Color(0xFFD0E8D0),
                   ),
                   child: SingleChildScrollView(
                     child: Padding(
                       padding: EdgeInsets.all(8),
-                      child: Text(
-                        outputText,
-                        style: TextStyle(color: Colors.black),
+                      child: TextSelectionTheme(
+                        data: TextSelectionThemeData(
+                          selectionColor: Colors.lightBlueAccent.withOpacity(
+                            0.5,
+                          ),
+                          cursorColor: Colors.lightBlueAccent,
+                          selectionHandleColor: Colors.lightBlueAccent,
+                        ),
+                        child: TextField(
+                          controller: TextEditingController(text: outputText),
+                          style: TextStyle(color: Colors.black),
+                          maxLines: null,
+                          readOnly: true,
+                          decoration: InputDecoration.collapsed(hintText: null),
+                        ),
                       ),
                     ),
                   ),
@@ -312,7 +408,7 @@ agents:
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Agencia {{A}}", style: TextStyle(color: Colors.white)),
+              Text("{{Ai}} Agents", style: TextStyle(color: Colors.black)),
               Row(
                 children: [
                   ElevatedButton(
@@ -328,6 +424,10 @@ agents:
                       );
                     },
                     style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(
+                        0xFFA64521,
+                      ), // Slightly brighter rust tone
+                      foregroundColor: Colors.white,
                       padding: EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 8,
@@ -335,18 +435,22 @@ agents:
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       minimumSize: Size(0, 0),
                     ),
-                    child: Text("Save"),
+                    child: Text("Save", style: TextStyle(color: Colors.white)),
                   ),
                   SizedBox(width: 8),
                   ElevatedButton(
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => SpecEditorPage(specController.text),
+                          builder: (_) => SpecEditorPage(specController),
                         ),
                       );
                     },
                     style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(
+                        0xFFA64521,
+                      ), // Slightly brighter rust tone
+                      foregroundColor: Colors.white,
                       padding: EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 8,
@@ -354,7 +458,7 @@ agents:
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       minimumSize: Size(0, 0),
                     ),
-                    child: Text("Edit"),
+                    child: Text("Edit", style: TextStyle(color: Colors.white)),
                   ),
                 ],
               ),
@@ -363,40 +467,27 @@ agents:
           SizedBox(height: 8),
           Expanded(
             child: Container(
+              height: 400,
               padding: EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.black,
                 border: Border.all(color: Colors.grey),
               ),
-              child: Theme(
-                data: Theme.of(context).copyWith(
-                  textSelectionTheme: TextSelectionThemeData(
-                    selectionColor: Colors.lightBlueAccent.withValues(
-                      alpha: 0.5,
-                    ),
-                    cursorColor: Colors.white,
-                    selectionHandleColor: Colors.lightBlueAccent,
-                  ),
+              child: TextSelectionTheme(
+                data: TextSelectionThemeData(
+                  selectionColor: Colors.lightBlueAccent.withOpacity(0.5),
+                  cursorColor: Colors.lightBlueAccent,
+                  selectionHandleColor: Colors.lightBlueAccent,
                 ),
-                child: Scrollbar(
-                  thumbVisibility: true,
-                  child: SingleChildScrollView(
-                    child: TextField(
-                      controller: specController,
-                      focusNode: specFocusNode,
-                      maxLines: null,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontFamily: 'Courier New',
-                        color: Colors.white,
-                      ),
-                      cursorColor: Colors.white,
-                      decoration: InputDecoration.collapsed(hintText: null),
-                      scrollPadding: EdgeInsets.all(20),
-                      enableInteractiveSelection: true,
-                      selectionControls: materialTextSelectionControls,
-                    ),
+                child: TextField(
+                  controller: specController,
+                  maxLines: null,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontFamily: 'Courier New',
+                    color: Colors.white,
                   ),
+                  decoration: InputDecoration.collapsed(hintText: null),
                 ),
               ),
             ),
@@ -408,14 +499,12 @@ agents:
 }
 
 class SpecEditorPage extends StatelessWidget {
-  final String spec;
+  final TextEditingController specController;
 
-  SpecEditorPage(this.spec, {super.key});
+  SpecEditorPage(this.specController, {super.key});
 
   @override
   Widget build(BuildContext context) {
-    final controller = SyntaxHighlightController()..text = spec;
-
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -423,31 +512,36 @@ class SpecEditorPage extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
         iconTheme: IconThemeData(color: Colors.white),
-        title: Text("Edit {{A}}"),
+        title: Text("Edit {{Ai}} Agents"),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Scrollbar(
-          thumbVisibility: true,
-          child: SingleChildScrollView(
+      body: Container(
+        padding: EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.black,
+          border: Border.all(color: Colors.grey),
+        ),
+        child: SizedBox.expand(
+          child: TextSelectionTheme(
+            data: TextSelectionThemeData(
+              selectionColor: Colors.lightBlueAccent.withOpacity(0.5),
+              cursorColor: Colors.lightBlueAccent,
+              selectionHandleColor: Colors.lightBlueAccent,
+            ),
             child: TextField(
-              controller: controller,
+              controller: specController,
               maxLines: null,
+              expands: true,
               style: TextStyle(
                 fontSize: 16,
                 fontFamily: 'Courier New',
                 color: Colors.white,
               ),
-              cursorColor: Colors.white,
               decoration: InputDecoration.collapsed(hintText: null),
-              scrollPadding: EdgeInsets.all(20),
-              enableInteractiveSelection: true,
-              selectionControls: materialTextSelectionControls,
             ),
           ),
         ),
       ),
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
     );
   }
 }
