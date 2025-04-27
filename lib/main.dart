@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:yaml/yaml.dart';
 import 'package:file_saver/file_saver.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // Custom SyntaxHighlightController for live syntax highlighting
 class SyntaxHighlightController extends TextEditingController {
@@ -32,7 +33,7 @@ class SyntaxHighlightController extends TextEditingController {
     final tmplStyle = TextStyle(color: Colors.white);
     final defaultStyle =
         style ??
-        TextStyle(color: Colors.white, fontSize: 16, fontFamily: 'Courier New');
+        TextStyle(color: Colors.white, fontSize: 16, fontFamily: 'Roboto');
 
     bool insideBlock = false;
 
@@ -90,11 +91,11 @@ class AgenciaApp extends StatelessWidget {
     return MaterialApp(
       title: '{{Ai}}',
       theme: ThemeData(
-        scaffoldBackgroundColor: Color(0xFFE0F7F1),
+        scaffoldBackgroundColor: Color(0xFFFAFAFA), // soft white/grey
         brightness: Brightness.light,
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Color(0xFF8B2500), // Deep rust / Spanish tile
+            backgroundColor: Color(0xFF2E7D32), // deep green
             foregroundColor: Colors.white,
           ),
         ),
@@ -104,7 +105,7 @@ class AgenciaApp extends StatelessWidget {
           border: OutlineInputBorder(),
         ),
         appBarTheme: AppBarTheme(
-          backgroundColor: Color(0xFF2E7D32),
+          backgroundColor: Color(0xFF2E7D32), // deep green
           elevation: 1,
           shadowColor: Colors.grey,
           titleTextStyle: TextStyle(
@@ -121,9 +122,9 @@ class AgenciaApp extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Color(0xFF4CAF50), // Lighter green
-                  Color(0xFF2E7D32), // Darker green (center)
-                  Color(0xFF4CAF50), // Lighter green
+                  Color(0xFFA5D6A7), // fresh light green
+                  Color(0xFF2E7D32), // deep green (center)
+                  Color(0xFFA5D6A7), // fresh light green
                 ],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
@@ -148,7 +149,8 @@ class AgenciaForm extends StatefulWidget {
   _AgenciaFormState createState() => _AgenciaFormState();
 }
 
-class _AgenciaFormState extends State<AgenciaForm> {
+class _AgenciaFormState extends State<AgenciaForm>
+    with SingleTickerProviderStateMixin {
   late TextEditingController specController;
   final inputController = TextEditingController(text: 'world');
   final agentController = TextEditingController(text: 'greet');
@@ -156,6 +158,9 @@ class _AgenciaFormState extends State<AgenciaForm> {
   String errorText = '';
   final FocusNode specFocusNode = FocusNode();
   final ScrollController specScrollController = ScrollController();
+
+  late AnimationController _logoController;
+  late Animation<double> _logoAnimation;
 
   @override
   void initState() {
@@ -168,6 +173,19 @@ agents:
       Hello, {{ .Input }}!
 ''',
     );
+    _logoController = AnimationController(
+      vsync: this,
+      duration: Duration(seconds: 2),
+    )..repeat(reverse: true);
+    _logoAnimation = Tween<double>(begin: 0.9, end: 1.10).animate(
+      CurvedAnimation(parent: _logoController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _logoController.dispose();
+    super.dispose();
   }
 
   void showProgressDialog() {
@@ -183,11 +201,31 @@ agents:
               color: Colors.white,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 16),
+                ScaleTransition(
+                  scale: _logoAnimation,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Color(0xFFF1D8C4),
+                      border: Border.all(color: Color(0xFF2E7D32), width: 1.5),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Text(
+                      "{{Ai}}",
+                      style: GoogleFonts.audiowide(
+                        textStyle: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.normal,
+                          color: Color(0xFF2E7D32),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 16),
                 Text("Running agent...", style: TextStyle(color: Colors.black)),
               ],
             ),
@@ -244,19 +282,21 @@ agents:
 
   @override
   Widget build(BuildContext context) {
+    var winWidth = MediaQuery.of(context).size.width;
+    var isMobile = winWidth < 1050;
     return Padding(
       padding: EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text("Input", style: TextStyle(color: Colors.black)),
-          SizedBox(height: 8),
+          SizedBox(height: 4),
           TextField(
             controller: inputController,
             maxLines: 2,
             decoration: InputDecoration(border: OutlineInputBorder()),
           ),
-          SizedBox(height: 12),
+          SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
@@ -265,7 +305,7 @@ agents:
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text("Starting Agent", style: TextStyle(color: Colors.black)),
-                  SizedBox(height: 8),
+                  SizedBox(height: 4),
                   Row(
                     children: [
                       SizedBox(
@@ -282,9 +322,7 @@ agents:
                       ElevatedButton(
                         onPressed: runAgent,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(
-                            0xFF8B2500,
-                          ), // Deep rust / Spanish tile
+                          backgroundColor: Color(0xFF2E7D32), // deep green
                           foregroundColor: Colors.white,
                           padding: EdgeInsets.symmetric(
                             horizontal: 28,
@@ -310,7 +348,7 @@ agents:
                           ),
                         ),
                       ),
-                      SizedBox(width: 8),
+                      SizedBox(width: 4),
                     ],
                   ),
                 ],
@@ -322,26 +360,32 @@ agents:
                   child: Container(
                     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
+                      color: Color(
+                        0xFFF1D8C4,
+                      ), // lighter soft complementary background
                       border: Border.all(color: Color(0xFF2E7D32), width: 1.5),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      " Agentic {{Ai}} Designer ", // TODO: text changes when width too small
-                      style: TextStyle(
-                        // fontWeight: FontWeight.bold,
-                        color: Color(0xFF2E7D32),
-                        fontSize: 32,
-                        fontFamily: 'comic sans',
+                      (isMobile)
+                          ? " Agentic\n   {{Ai}} \nDesigner"
+                          : " Agentic {{Ai}} Designer ",
+                      style: GoogleFonts.audiowide(
+                        textStyle: TextStyle(
+                          fontSize: (isMobile) ? 18 : 28,
+                          fontWeight: FontWeight.normal,
+                          color: Color(0xFF2E7D32),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
 
-              SizedBox(width: 8),
+              SizedBox(width: 4),
             ],
           ),
-          SizedBox(height: 12),
+          SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -354,9 +398,7 @@ agents:
                   );
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(
-                    0xFFA64521,
-                  ), // Slightly brighter rust tone
+                  backgroundColor: Color(0xFF2E7D32), // deep green
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -369,7 +411,7 @@ agents:
               ),
             ],
           ),
-          SizedBox(height: 8),
+          SizedBox(height: 4),
           Row(
             children: [
               Expanded(
@@ -377,7 +419,9 @@ agents:
                   height: 120,
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey),
-                    color: Color(0xFFD0E8D0),
+                    color: Color(
+                      0xFFE8F5E9,
+                    ), // lighter fresh green for Output box
                   ),
                   child: SingleChildScrollView(
                     child: Padding(
@@ -404,7 +448,7 @@ agents:
               ),
             ],
           ),
-          SizedBox(height: 12),
+          SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -424,9 +468,7 @@ agents:
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(
-                        0xFFA64521,
-                      ), // Slightly brighter rust tone
+                      backgroundColor: Color(0xFF2E7D32), // deep green
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.symmetric(
                         horizontal: 12,
@@ -437,7 +479,7 @@ agents:
                     ),
                     child: Text("Save", style: TextStyle(color: Colors.white)),
                   ),
-                  SizedBox(width: 8),
+                  SizedBox(width: 4),
                   ElevatedButton(
                     onPressed: () {
                       Navigator.of(context).push(
@@ -447,9 +489,7 @@ agents:
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(
-                        0xFFA64521,
-                      ), // Slightly brighter rust tone
+                      backgroundColor: Color(0xFF2E7D32), // deep green
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.symmetric(
                         horizontal: 12,
@@ -464,7 +504,7 @@ agents:
               ),
             ],
           ),
-          SizedBox(height: 8),
+          SizedBox(height: 4),
           Expanded(
             child: Container(
               height: 400,
@@ -475,7 +515,7 @@ agents:
               ),
               child: TextSelectionTheme(
                 data: TextSelectionThemeData(
-                  selectionColor: Colors.lightBlueAccent.withOpacity(0.5),
+                  selectionColor: Colors.lightBlueAccent.withValues(alpha: 0.5),
                   cursorColor: Colors.lightBlueAccent,
                   selectionHandleColor: Colors.lightBlueAccent,
                 ),
@@ -484,7 +524,7 @@ agents:
                   maxLines: null,
                   style: TextStyle(
                     fontSize: 16,
-                    fontFamily: 'Courier New',
+                    fontFamily: 'Roboto',
                     color: Colors.white,
                   ),
                   decoration: InputDecoration.collapsed(hintText: null),
@@ -533,7 +573,7 @@ class SpecEditorPage extends StatelessWidget {
               expands: true,
               style: TextStyle(
                 fontSize: 16,
-                fontFamily: 'Courier New',
+                fontFamily: 'Roboto',
                 color: Colors.white,
               ),
               decoration: InputDecoration.collapsed(hintText: null),
