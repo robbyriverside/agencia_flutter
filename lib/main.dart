@@ -6,79 +6,6 @@ import 'package:yaml/yaml.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-// Custom SyntaxHighlightController for live syntax highlighting
-class SyntaxHighlightController extends TextEditingController {
-  @override
-  TextSpan buildTextSpan({
-    required BuildContext context,
-    TextStyle? style,
-    required bool withComposing,
-  }) {
-    final lines = text.split('\n');
-    List<TextSpan> spans = [];
-
-    final agentStyle = TextStyle(
-      color: Colors.lightBlue,
-      fontWeight: FontWeight.bold,
-    );
-    final agentsStyle = TextStyle(
-      color: Colors.orangeAccent,
-      fontWeight: FontWeight.bold,
-    );
-    final keyStyle = TextStyle(
-      color: Colors.yellowAccent,
-      fontWeight: FontWeight.bold,
-    );
-    final exprStyle = TextStyle(color: Colors.greenAccent);
-    final tmplStyle = TextStyle(color: Colors.white);
-    final defaultStyle =
-        style ??
-        TextStyle(color: Colors.white, fontSize: 16, fontFamily: 'Roboto');
-
-    bool insideBlock = false;
-
-    for (var line in lines) {
-      if (line.trim().isEmpty) {
-        spans.add(TextSpan(text: '\n', style: defaultStyle));
-        continue;
-      }
-
-      if (line.startsWith('agents:')) {
-        spans.add(TextSpan(text: line + '\n', style: agentsStyle));
-      } else if (RegExp(r'^\s{2}[\w\-]+:$').hasMatch(line)) {
-        spans.add(TextSpan(text: line + '\n', style: agentStyle));
-      } else if (line.contains('template:') || line.contains('prompt:')) {
-        spans.add(TextSpan(text: line + '\n', style: keyStyle));
-        insideBlock = true;
-      } else if (insideBlock && RegExp(r'^\s+').hasMatch(line)) {
-        final matches = RegExp(r'(\{\{.*?\}\})').allMatches(line);
-        int last = 0;
-        for (final match in matches) {
-          if (match.start > last) {
-            spans.add(
-              TextSpan(
-                text: line.substring(last, match.start),
-                style: tmplStyle,
-              ),
-            );
-          }
-          spans.add(TextSpan(text: match.group(0), style: exprStyle));
-          last = match.end;
-        }
-        if (last < line.length) {
-          spans.add(TextSpan(text: line.substring(last), style: tmplStyle));
-        }
-        spans.add(TextSpan(text: '\n'));
-      } else {
-        spans.add(TextSpan(text: line + '\n', style: defaultStyle));
-        insideBlock = false;
-      }
-    }
-
-    return TextSpan(style: defaultStyle, children: spans);
-  }
-}
-
 void main() {
   runApp(AgenciaApp());
 }
@@ -175,9 +102,9 @@ agents:
     );
     _logoController = AnimationController(
       vsync: this,
-      duration: Duration(seconds: 2),
+      duration: Duration(seconds: 1),
     )..repeat(reverse: true);
-    _logoAnimation = Tween<double>(begin: 0.9, end: 1.10).animate(
+    _logoAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
       CurvedAnimation(parent: _logoController, curve: Curves.easeInOut),
     );
   }
@@ -192,7 +119,7 @@ agents:
     showDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (BuildContext context) {
         return Center(
           child: Container(
@@ -283,7 +210,8 @@ agents:
   @override
   Widget build(BuildContext context) {
     var winWidth = MediaQuery.of(context).size.width;
-    var isMobile = winWidth < 1050;
+    var isMobile = winWidth < 400;
+    var isTablet = winWidth < 1050;
     return Padding(
       padding: EdgeInsets.all(16),
       child: Column(
@@ -367,12 +295,14 @@ agents:
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      (isMobile)
-                          ? " Agentic\n   {{Ai}} \nDesigner"
+                      (isTablet)
+                          ? ((isMobile)
+                              ? "{{Ai}}"
+                              : " Agentic\n   {{Ai}} \nDesigner")
                           : " Agentic {{Ai}} Designer ",
                       style: GoogleFonts.audiowide(
                         textStyle: TextStyle(
-                          fontSize: (isMobile) ? 18 : 28,
+                          fontSize: (isTablet) ? 16 : 28,
                           fontWeight: FontWeight.normal,
                           color: Color(0xFF2E7D32),
                         ),
