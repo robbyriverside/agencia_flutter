@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:yaml/yaml.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:html' as html;
 
 void main() {
   runApp(AgenciaApp());
@@ -51,11 +52,11 @@ class AgenciaApp extends StatelessWidget {
                 colors: [
                   Color(0xFFA5D6A7), // fresh light green
                   Color(0xFF2E7D32), // deep green (center)
-                  Color(0xFFA5D6A7), // fresh light green
+                  // Color(0xFFA5D6A7), // fresh light green
                 ],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
-                stops: [0.0, 0.5, 1.0],
+                stops: [0.0, 0.5],
               ),
             ),
             child: AppBar(
@@ -162,6 +163,12 @@ agents:
     );
   }
 
+  Future<void> chatAgent() async {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ChatPage()));
+  }
+
   Future<void> runAgent() async {
     try {
       loadYaml(specController.text);
@@ -237,7 +244,7 @@ agents:
                   Row(
                     children: [
                       SizedBox(
-                        width: MediaQuery.of(context).size.width * 0.45,
+                        width: MediaQuery.of(context).size.width * 0.35,
                         child: TextField(
                           controller: agentController,
                           maxLines: 1,
@@ -269,6 +276,36 @@ agents:
                         ),
                         child: Text(
                           "Run",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 6),
+                      ElevatedButton(
+                        onPressed: chatAgent,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFF2E7D32), // deep green
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 28,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 6,
+                          shadowColor: Colors.black54,
+                        ).copyWith(
+                          padding: WidgetStateProperty.all(
+                            EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                          ),
+                          alignment: Alignment.center,
+                        ),
+                        child: Text(
+                          "Chat",
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
@@ -512,6 +549,257 @@ class SpecEditorPage extends StatelessWidget {
         ),
       ),
       backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+    );
+  }
+}
+
+class ChatPage extends StatefulWidget {
+  const ChatPage({super.key});
+
+  @override
+  State<ChatPage> createState() => _ChatPageState();
+}
+
+// Custom formatter to allow newline only with Shift+Enter
+// and suppress newline if Enter is pressed without Shift.
+// This works for desktop/web where hardware keyboard events are available.
+class EnterKeyFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Allow newline only if shift key is pressed
+    final pressedKeys = HardwareKeyboard.instance.logicalKeysPressed;
+    final shiftPressed =
+        pressedKeys.contains(LogicalKeyboardKey.shiftLeft) ||
+        pressedKeys.contains(LogicalKeyboardKey.shiftRight);
+
+    // If Enter without Shift, block newline insertion
+    if (!shiftPressed &&
+        newValue.text.length > oldValue.text.length &&
+        newValue.text.endsWith('\n')) {
+      return oldValue;
+    }
+
+    return newValue;
+  }
+}
+
+class _ChatPageState extends State<ChatPage> {
+  final TextEditingController _chatController = TextEditingController();
+  final List<String> _messages = [];
+  html.WebSocket? _socket;
+  final FocusNode _chatFocusNode = FocusNode();
+  bool _isConnecting = false;
+  // For temporary editing, not strictly needed but included per instruction
+  TextEditingController _tempController = TextEditingController();
+
+  void _connectWebSocket() {
+    if (_isConnecting) return;
+    _isConnecting = true;
+
+    try {
+      _socket = html.WebSocket('ws://localhost:8080/api/chat');
+    } catch (e) {
+      print("WebSocket creation error: $e");
+      _isConnecting = false;
+      return;
+    }
+
+    _socket!.onOpen.listen((event) {
+      print("WebSocket connected");
+      _isConnecting = false;
+    });
+
+    _socket!.onMessage.listen((event) {
+      setState(() {
+        _messages.add(event.data.toString());
+      });
+    });
+
+    _socket!.onClose.listen((event) {
+      print("WebSocket closed.");
+      _isConnecting = false;
+    });
+
+    _socket!.onError.listen((event) {
+      print("WebSocket error.");
+      _isConnecting = false;
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _connectWebSocket();
+  }
+
+  @override
+  void dispose() {
+    _socket?.close();
+    _chatController.dispose();
+    _chatFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _sendMessage() {
+    final raw = _chatController.text;
+    final message =
+        raw.trimRight(); // preserve internal newlines, trim only trailing
+    if (message.isEmpty) return;
+
+    // Check if WebSocket is open
+    if (_socket == null || _socket!.readyState != html.WebSocket.OPEN) {
+      try {
+        _connectWebSocket();
+        Future.delayed(Duration(milliseconds: 500), () {
+          if (_socket == null || _socket!.readyState != html.WebSocket.OPEN) {
+            setState(() {
+              _messages.add(
+                "🤖 Sorry, I'm currently disconnected and couldn't send your message. Please try again later.",
+              );
+            });
+          } else {
+            setState(() {
+              _messages.add("You: $message");
+              _chatController.text = '';
+              _chatController.selection = TextSelection.collapsed(offset: 0);
+            });
+            _chatFocusNode.requestFocus();
+            _socket?.send(message); // Send the original message after reconnect
+          }
+        });
+      } catch (e) {
+        setState(() {
+          _messages.add(
+            "🤖 Apologies, we're unable to reconnect at the moment. Please try again shortly.",
+          );
+        });
+      }
+      return;
+    }
+
+    setState(() {
+      _messages.add("You: $message");
+      _chatController.text = '';
+      _chatController.selection = TextSelection.collapsed(offset: 0);
+    });
+    _chatFocusNode.requestFocus();
+    _socket?.send(message);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Color(0xFF212121), // dark gray
+      appBar: AppBar(
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        iconTheme: IconThemeData(color: Colors.white),
+        title: Text("Chat", style: TextStyle(color: Colors.white)),
+        backgroundColor: Color(0xFF2E7D32),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: EdgeInsets.all(12),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Color(0xFF424242),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _messages[index],
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.all(8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: KeyboardListener(
+                    focusNode: FocusNode(),
+                    onKeyEvent: (KeyEvent event) {
+                      if (event is KeyDownEvent &&
+                          event.logicalKey == LogicalKeyboardKey.enter &&
+                          !(HardwareKeyboard.instance.logicalKeysPressed
+                                  .contains(LogicalKeyboardKey.shiftLeft) ||
+                              HardwareKeyboard.instance.logicalKeysPressed
+                                  .contains(LogicalKeyboardKey.shiftRight))) {
+                        _sendMessage();
+                      }
+                    },
+                    child: TextFormField(
+                      controller: _chatController,
+                      focusNode: _chatFocusNode,
+                      keyboardType: TextInputType.multiline,
+                      inputFormatters: [EnterKeyFormatter()],
+                      textInputAction: TextInputAction.newline,
+                      minLines: 1,
+                      maxLines: null,
+                      onChanged: (text) => setState(() {}),
+                      // onFieldSubmitted: (_) => _sendMessage(),
+                      style: TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        hintText: "Type your message...",
+                        hintStyle: TextStyle(color: Colors.white54),
+                        filled: true,
+                        fillColor: Color(0xFF616161),
+                        border: OutlineInputBorder(
+                          borderSide: BorderSide(color: Colors.white),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: Colors.white),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: Colors.white),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _sendMessage,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF2E7D32),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                  child: Text("Send"),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
