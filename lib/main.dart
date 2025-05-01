@@ -5,7 +5,8 @@ import 'dart:convert';
 import 'package:yaml/yaml.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:html' as html;
+import 'package:web_socket_channel/html.dart' as html_ws;
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
   runApp(AgenciaApp());
@@ -164,9 +165,15 @@ agents:
   }
 
   Future<void> chatAgent() async {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const ChatPage()));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder:
+            (_) => ChatPage(
+              agentController: agentController,
+              specController: specController,
+            ),
+      ),
+    );
   }
 
   Future<void> runAgent() async {
@@ -554,7 +561,14 @@ class SpecEditorPage extends StatelessWidget {
 }
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key});
+  final TextEditingController agentController;
+  final TextEditingController specController;
+
+  const ChatPage({
+    super.key,
+    required this.agentController,
+    required this.specController,
+  });
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -589,55 +603,86 @@ class EnterKeyFormatter extends TextInputFormatter {
 class _ChatPageState extends State<ChatPage> {
   final TextEditingController _chatController = TextEditingController();
   final List<String> _messages = [];
-  html.WebSocket? _socket;
+  WebSocketChannel? _socket;
   final FocusNode _chatFocusNode = FocusNode();
   bool _isConnecting = false;
   // For temporary editing, not strictly needed but included per instruction
   TextEditingController _tempController = TextEditingController();
+
+  // Facts and preferences state
+  bool _showFactsPane = false;
+  Map<String, dynamic> _facts = {};
+  Map<String, dynamic> _preferences = {};
+
+  late final TextEditingController agentController;
+  late final TextEditingController specController;
+
+  Future<void> _loadFactsAndPrefs() async {
+    try {
+      final response = await http.get(Uri.parse('/api/facts'));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _facts = data['facts'] ?? {};
+          _preferences = data['preferences'] ?? {};
+        });
+      }
+    } catch (e) {
+      print("Failed to load facts/preferences: $e");
+    }
+  }
 
   void _connectWebSocket() {
     if (_isConnecting) return;
     _isConnecting = true;
 
     try {
-      _socket = html.WebSocket('ws://localhost:8080/api/chat');
+      _socket = html_ws.HtmlWebSocketChannel.connect(
+        'ws://localhost:8080/api/chat',
+      );
+      // Send the initial handshake payload with agent and spec
+      _socket!.sink.add(
+        jsonEncode({
+          "agent": agentController.text,
+          "spec": specController.text,
+        }),
+      );
     } catch (e) {
       print("WebSocket creation error: $e");
       _isConnecting = false;
       return;
     }
 
-    _socket!.onOpen.listen((event) {
-      print("WebSocket connected");
-      _isConnecting = false;
-    });
-
-    _socket!.onMessage.listen((event) {
-      setState(() {
-        _messages.add(event.data.toString());
-      });
-    });
-
-    _socket!.onClose.listen((event) {
-      print("WebSocket closed.");
-      _isConnecting = false;
-    });
-
-    _socket!.onError.listen((event) {
-      print("WebSocket error.");
-      _isConnecting = false;
-    });
+    _socket!.stream.listen(
+      (event) {
+        setState(() {
+          _messages.add(event.toString());
+        });
+      },
+      onDone: () {
+        print("WebSocket closed.");
+        _isConnecting = false;
+      },
+      onError: (error) {
+        print("WebSocket error: $error");
+        _isConnecting = false;
+      },
+    );
+    // WebSocket connected is not available directly here, but we can consider isConnecting false after listen.
+    _isConnecting = false;
   }
 
   @override
   void initState() {
     super.initState();
+    agentController = widget.agentController;
+    specController = widget.specController;
     _connectWebSocket();
   }
 
   @override
   void dispose() {
-    _socket?.close();
+    _socket?.sink.close();
     _chatController.dispose();
     _chatFocusNode.dispose();
     super.dispose();
@@ -649,12 +694,12 @@ class _ChatPageState extends State<ChatPage> {
         raw.trimRight(); // preserve internal newlines, trim only trailing
     if (message.isEmpty) return;
 
-    // Check if WebSocket is open
-    if (_socket == null || _socket!.readyState != html.WebSocket.OPEN) {
+    // Check if WebSocket is open (not available in WebSocketChannel, so we just check for null)
+    if (_socket == null) {
       try {
         _connectWebSocket();
         Future.delayed(Duration(milliseconds: 500), () {
-          if (_socket == null || _socket!.readyState != html.WebSocket.OPEN) {
+          if (_socket == null) {
             setState(() {
               _messages.add(
                 "🤖 Sorry, I'm currently disconnected and couldn't send your message. Please try again later.",
@@ -667,7 +712,9 @@ class _ChatPageState extends State<ChatPage> {
               _chatController.selection = TextSelection.collapsed(offset: 0);
             });
             _chatFocusNode.requestFocus();
-            _socket?.send(message); // Send the original message after reconnect
+            _socket?.sink.add(
+              message,
+            ); // Send the original message after reconnect
           }
         });
       } catch (e) {
@@ -686,7 +733,7 @@ class _ChatPageState extends State<ChatPage> {
       _chatController.selection = TextSelection.collapsed(offset: 0);
     });
     _chatFocusNode.requestFocus();
-    _socket?.send(message);
+    _socket?.sink.add(message);
   }
 
   @override
@@ -701,9 +748,70 @@ class _ChatPageState extends State<ChatPage> {
         iconTheme: IconThemeData(color: Colors.white),
         title: Text("Chat", style: TextStyle(color: Colors.white)),
         backgroundColor: Color(0xFF2E7D32),
+        actions: [
+          IconButton(
+            icon: Icon(
+              _showFactsPane
+                  ? Icons.keyboard_arrow_up
+                  : Icons.keyboard_arrow_down,
+              color: Colors.white,
+            ),
+            onPressed: () {
+              setState(() {
+                _showFactsPane = !_showFactsPane;
+                if (_showFactsPane) {
+                  _loadFactsAndPrefs();
+                }
+              });
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
+          if (_showFactsPane)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final double maxHeight = constraints.maxHeight * 0.5;
+                final hasData = _facts.isNotEmpty || _preferences.isNotEmpty;
+                final yamlContent = StringBuffer();
+                if (_facts.isNotEmpty) {
+                  yamlContent.writeln("Facts:");
+                  _facts.forEach((key, value) {
+                    yamlContent.writeln("  $key: $value");
+                  });
+                  yamlContent.writeln();
+                }
+                if (_preferences.isNotEmpty) {
+                  yamlContent.writeln("Preferences:");
+                  _preferences.forEach((key, value) {
+                    yamlContent.writeln("  $key: $value");
+                  });
+                }
+                if (!hasData) {
+                  yamlContent.writeln("No facts or preferences.");
+                }
+
+                return ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: maxHeight),
+                  child: Container(
+                    width: double.infinity,
+                    color: Colors.white,
+                    padding: EdgeInsets.all(8),
+                    child: SingleChildScrollView(
+                      child: SelectableText(
+                        yamlContent.toString(),
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 14,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           Expanded(
             child: ListView.builder(
               padding: EdgeInsets.all(12),
