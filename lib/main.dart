@@ -605,7 +605,6 @@ class _ChatPageState extends State<ChatPage> {
   final List<String> _messages = [];
   WebSocketChannel? _socket;
   final FocusNode _chatFocusNode = FocusNode();
-  bool _isConnecting = false;
   // For temporary editing, not strictly needed but included per instruction
   TextEditingController _tempController = TextEditingController();
 
@@ -633,9 +632,6 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _connectWebSocket() {
-    if (_isConnecting) return;
-    _isConnecting = true;
-
     try {
       _socket = html_ws.HtmlWebSocketChannel.connect(
         'ws://localhost:8080/api/chat',
@@ -649,7 +645,6 @@ class _ChatPageState extends State<ChatPage> {
       );
     } catch (e) {
       print("WebSocket creation error: $e");
-      _isConnecting = false;
       return;
     }
 
@@ -661,15 +656,13 @@ class _ChatPageState extends State<ChatPage> {
       },
       onDone: () {
         print("WebSocket closed.");
-        _isConnecting = false;
+        _socket = null;
       },
       onError: (error) {
         print("WebSocket error: $error");
-        _isConnecting = false;
+        _socket = null;
       },
     );
-    // WebSocket connected is not available directly here, but we can consider isConnecting false after listen.
-    _isConnecting = false;
   }
 
   @override
@@ -677,7 +670,7 @@ class _ChatPageState extends State<ChatPage> {
     super.initState();
     agentController = widget.agentController;
     specController = widget.specController;
-    _connectWebSocket();
+    // Do not connect on init; only connect when sending a message if needed.
   }
 
   @override
@@ -694,10 +687,11 @@ class _ChatPageState extends State<ChatPage> {
         raw.trimRight(); // preserve internal newlines, trim only trailing
     if (message.isEmpty) return;
 
-    // Check if WebSocket is open (not available in WebSocketChannel, so we just check for null)
+    // Only (re)connect if socket is null (closed/disconnected)
     if (_socket == null) {
       try {
         _connectWebSocket();
+        // Wait briefly for connection to establish, then send, or give up if still null.
         Future.delayed(Duration(milliseconds: 500), () {
           if (_socket == null) {
             setState(() {
@@ -712,9 +706,7 @@ class _ChatPageState extends State<ChatPage> {
               _chatController.selection = TextSelection.collapsed(offset: 0);
             });
             _chatFocusNode.requestFocus();
-            _socket?.sink.add(
-              message,
-            ); // Send the original message after reconnect
+            _socket?.sink.add(message);
           }
         });
       } catch (e) {
