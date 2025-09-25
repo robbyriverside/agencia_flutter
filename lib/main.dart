@@ -18,7 +18,8 @@ class AgenciaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '{{Ai}}',
+      debugShowCheckedModeBanner: false,
+      title: 'Agencia {{Ai}}',
       theme: ThemeData(
         scaffoldBackgroundColor: Color(0xFFFAFAFA), // soft white/grey
         brightness: Brightness.light,
@@ -81,7 +82,7 @@ class AgenciaForm extends StatefulWidget {
 class _AgenciaFormState extends State<AgenciaForm>
     with SingleTickerProviderStateMixin {
   late TextEditingController specController;
-  final inputController = TextEditingController(text: 'world');
+  // final inputController = TextEditingController(text: 'world');
   final agentController = TextEditingController(text: 'greet');
   String outputText = '';
   String errorText = '';
@@ -187,38 +188,15 @@ agents:
       return;
     }
 
-    showProgressDialog();
-
-    final requestBody = {
-      'spec': specController.text,
-      'input': inputController.text,
-      'agent': agentController.text,
-    };
-    // print("Sending: ${jsonEncode(requestBody)}");
-
-    final response = await http.post(
-      Uri.parse('/api/run'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(requestBody),
-    );
-
-    Navigator.of(context, rootNavigator: true).pop(); // close dialog
-
-    if (response.statusCode == 200) {
-      final Map<String, dynamic> result = jsonDecode(response.body);
-      setState(() {
-        outputText = result['output'] ?? '';
-        errorText = result['error'] ?? '';
-      });
-    } else {
-      print(
-        'HTTP ${response.statusCode} ${response.reasonPhrase}\n${response.body}',
-      );
-      setState(() {
-        outputText = response.body;
-        errorText = response.body;
-      });
-    }
+    const message =
+        'Run mode is no longer available. Please use Chat to talk to your agents.';
+    setState(() {
+      outputText = message;
+      errorText = '';
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -231,14 +209,6 @@ agents:
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Input", style: TextStyle(color: Colors.black)),
-          SizedBox(height: 4),
-          TextField(
-            controller: inputController,
-            maxLines: 2,
-            decoration: InputDecoration(border: OutlineInputBorder()),
-          ),
-          SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
@@ -252,41 +222,20 @@ agents:
                     children: [
                       SizedBox(
                         width: MediaQuery.of(context).size.width * 0.35,
-                        child: TextField(
-                          controller: agentController,
-                          maxLines: 1,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(),
+                        child: TextSelectionTheme(
+                          data: TextSelectionThemeData(
+                            selectionColor: Colors.lightBlueAccent.withValues(
+                              alpha: 0.5,
+                            ),
+                            cursorColor: Colors.lightBlueAccent,
+                            selectionHandleColor: Colors.lightBlueAccent,
                           ),
-                        ),
-                      ),
-                      SizedBox(width: 6),
-                      ElevatedButton(
-                        onPressed: runAgent,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF2E7D32), // deep green
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 28,
-                            vertical: 14,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 6,
-                          shadowColor: Colors.black54,
-                        ).copyWith(
-                          padding: WidgetStateProperty.all(
-                            EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                          ),
-                          alignment: Alignment.center,
-                        ),
-                        child: Text(
-                          "Run",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Colors.white,
+                          child: TextField(
+                            controller: agentController,
+                            maxLines: 1,
+                            decoration: InputDecoration(
+                              border: OutlineInputBorder(),
+                            ),
                           ),
                         ),
                       ),
@@ -359,70 +308,7 @@ agents:
               SizedBox(width: 4),
             ],
           ),
-          SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text("Output", style: TextStyle(color: Colors.black)),
-              ElevatedButton(
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: outputText));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Output copied to clipboard")),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF2E7D32), // deep green
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  minimumSize: Size(0, 0),
-                ),
-                child: Text(
-                  "Copy Output",
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 120,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    color: Color(
-                      0xFFE8F5E9,
-                    ), // lighter fresh green for Output box
-                  ),
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: EdgeInsets.all(8),
-                      child: TextSelectionTheme(
-                        data: TextSelectionThemeData(
-                          selectionColor: Colors.lightBlueAccent.withOpacity(
-                            0.5,
-                          ),
-                          cursorColor: Colors.lightBlueAccent,
-                          selectionHandleColor: Colors.lightBlueAccent,
-                        ),
-                        child: TextField(
-                          controller: TextEditingController(text: outputText),
-                          style: TextStyle(color: Colors.black),
-                          maxLines: null,
-                          readOnly: true,
-                          decoration: InputDecoration.collapsed(hintText: null),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 8),
+          SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -600,43 +486,146 @@ class EnterKeyFormatter extends TextInputFormatter {
   }
 }
 
+class ChatMessage {
+  final String id;
+  final String sender;
+  final String context;
+  final String message;
+  final bool isUser; // true if sent by the user
+  ChatMessage({
+    required this.id,
+    required this.sender,
+    required this.context,
+    required this.message,
+    this.isUser = false,
+  });
+}
+
+class SenderMeta {
+  final String sender;
+  final String jobId;
+  final String context;
+  bool unread;
+  String status; // 'priority', 'finished', 'update', etc.
+  SenderMeta({
+    required this.sender,
+    required this.jobId,
+    required this.context,
+    this.unread = false,
+    this.status = '',
+  });
+}
+
 class _ChatPageState extends State<ChatPage> {
   final TextEditingController _chatController = TextEditingController();
-  final List<String> _messages = [];
+  final List<ChatMessage> _messages = [];
   WebSocketChannel? _socket;
+  String? _chatId;
   final FocusNode _chatFocusNode = FocusNode();
-  // For temporary editing, not strictly needed but included per instruction
   TextEditingController _tempController = TextEditingController();
 
-  // Facts and preferences state
+  // Facts and observationsstate
   bool _showFactsPane = false;
   Map<String, dynamic> _facts = {};
-  Map<String, dynamic> _preferences = {};
+  Map<String, dynamic> _observations = {};
 
   late final TextEditingController agentController;
   late final TextEditingController specController;
 
+  // Sender selection/filter state
+  String? _currentSender; // null means group view (all senders)
+  String? _currentSenderJobId;
+  bool _groupMode = true;
+  List<SenderMeta> _senders = [];
+
   Future<void> _loadFactsAndPrefs() async {
+    if (_chatId == null || _chatId!.isEmpty) {
+      return;
+    }
     try {
-      final response = await http.get(Uri.parse('/api/facts'));
+      final uri = Uri(
+        path: '/api/facts',
+        queryParameters: {'chat_id': _chatId!},
+      );
+      final response = await http.get(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
           _facts = data['facts'] ?? {};
-          _preferences = data['preferences'] ?? {};
+          _observations = data['observations'] ?? {};
         });
       }
     } catch (e) {
-      print("Failed to load facts/preferences: $e");
+      print("Failed to load facts/observations: $e");
     }
   }
 
+  void _updateSendersFromMessages() {
+    // Build/update sender list with unread status and status color
+    final Map<String, SenderMeta> meta = {};
+    for (final msg in _messages) {
+      if (msg.isUser) continue;
+      final key = '${msg.sender}:${msg.context}';
+      // Try to extract job id from context or message if possible
+      String jobId = '';
+      if (msg.context.contains('job')) {
+        jobId = msg.context;
+      } else if (RegExp(r'job[_\-]?\w+').hasMatch(msg.message)) {
+        jobId = RegExp(r'job[_\-]?\w+').firstMatch(msg.message)?.group(0) ?? '';
+      }
+      // Try to extract status from message or context
+      String status = '';
+      if (msg.context.toLowerCase().contains('priority')) status = 'priority';
+      if (msg.context.toLowerCase().contains('finished')) status = 'finished';
+      if (msg.context.toLowerCase().contains('update')) status = 'update';
+      if (msg.message.toLowerCase().contains('priority')) status = 'priority';
+      if (msg.message.toLowerCase().contains('finished')) status = 'finished';
+      if (msg.message.toLowerCase().contains('update')) status = 'update';
+      if (!meta.containsKey(key)) {
+        meta[key] = SenderMeta(
+          sender: msg.sender,
+          jobId: jobId,
+          context: msg.context,
+          unread: false,
+          status: status,
+        );
+      }
+    }
+    // Mark unread for senders with unseen messages
+    for (final msg in _messages) {
+      if (!msg.isUser) {
+        final key = '${msg.sender}:${msg.context}';
+        if (_groupMode || _currentSender == null) {
+          // In group mode, any agent message is unread if it is the last message
+          if (msg == _messages.last) {
+            meta[key]?.unread = true;
+          }
+        } else {
+          // In filtered mode, mark unread if last message for that sender/context
+          if (msg.sender == _currentSender &&
+              (_currentSenderJobId == null ||
+                  msg.context == _currentSenderJobId) &&
+              msg == _messages.last) {
+            meta[key]?.unread = true;
+          }
+        }
+      }
+    }
+    setState(() {
+      _senders = meta.values.toList();
+    });
+  }
+
   void _connectWebSocket() {
+    setState(() {
+      _chatId = null;
+      _facts = {};
+      _observations = {};
+    });
     try {
       _socket = html_ws.HtmlWebSocketChannel.connect(
         'ws://localhost:8080/api/chat',
       );
-      // Send the initial handshake payload with agent and spec
       _socket!.sink.add(
         jsonEncode({
           "agent": agentController.text,
@@ -650,17 +639,98 @@ class _ChatPageState extends State<ChatPage> {
 
     _socket!.stream.listen(
       (event) {
+        dynamic decoded;
+        try {
+          decoded = jsonDecode(event);
+        } catch (_) {
+          decoded = null;
+        }
+
+        if (decoded is Map && decoded['type'] == 'chat_init') {
+          final newChatId = decoded['chat_id']?.toString();
+          if (mounted && newChatId != null && newChatId.isNotEmpty) {
+            setState(() {
+              _chatId = newChatId;
+            });
+            if (_showFactsPane) {
+              _loadFactsAndPrefs();
+            }
+          }
+          return;
+        }
+
+        if (!mounted) {
+          return;
+        }
+
         setState(() {
-          _messages.add(event.toString());
+          try {
+            // Accept both structured and fallback to string for dev
+            if (decoded is Map &&
+                decoded.containsKey('id') &&
+                decoded.containsKey('sender') &&
+                decoded.containsKey('context') &&
+                decoded.containsKey('message')) {
+              // Extract message string, handling nested JSON object
+              final msgField = decoded['message'];
+              final msgString =
+                  msgField is Map
+                      ? msgField['message']?.toString() ?? jsonEncode(msgField)
+                      : msgField.toString();
+              _messages.add(
+                ChatMessage(
+                  id: decoded['id'].toString(),
+                  sender: decoded['sender'].toString(),
+                  context: decoded['context'].toString(),
+                  message: msgString,
+                  isUser: false,
+                ),
+              );
+            } else {
+              // Fallback: treat as string
+              _messages.add(
+                ChatMessage(
+                  id: UniqueKey().toString(),
+                  sender: "Agent",
+                  context: "",
+                  message: event.toString(),
+                  isUser: false,
+                ),
+              );
+            }
+          } catch (e) {
+            _messages.add(
+              ChatMessage(
+                id: UniqueKey().toString(),
+                sender: "Agent",
+                context: "",
+                message: event.toString(),
+                isUser: false,
+              ),
+            );
+          }
+          _updateSendersFromMessages();
         });
       },
       onDone: () {
         print("WebSocket closed.");
         _socket = null;
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _chatId = null;
+        });
       },
       onError: (error) {
         print("WebSocket error: $error");
         _socket = null;
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _chatId = null;
+        });
       },
     );
   }
@@ -670,7 +740,9 @@ class _ChatPageState extends State<ChatPage> {
     super.initState();
     agentController = widget.agentController;
     specController = widget.specController;
-    // Do not connect on init; only connect when sending a message if needed.
+    _groupMode = true;
+    _currentSender = null;
+    _currentSenderJobId = null;
   }
 
   @override
@@ -683,55 +755,155 @@ class _ChatPageState extends State<ChatPage> {
 
   void _sendMessage() {
     final raw = _chatController.text;
-    final message =
-        raw.trimRight(); // preserve internal newlines, trim only trailing
+    final message = raw.trimRight();
     if (message.isEmpty) return;
 
     // Only (re)connect if socket is null (closed/disconnected)
     if (_socket == null) {
       try {
         _connectWebSocket();
-        // Wait briefly for connection to establish, then send, or give up if still null.
         Future.delayed(Duration(milliseconds: 500), () {
           if (_socket == null) {
             setState(() {
               _messages.add(
-                "🤖 Sorry, I'm currently disconnected and couldn't send your message. Please try again later.",
+                ChatMessage(
+                  id: "",
+                  sender: "You",
+                  context: _currentSender ?? agentController.text,
+                  message:
+                      "🤖 Sorry, I'm currently disconnected and couldn't send your message. Please try again later.",
+                  isUser: true,
+                ),
               );
+              _updateSendersFromMessages();
             });
           } else {
             setState(() {
-              _messages.add("You: $message");
+              _messages.add(
+                ChatMessage(
+                  id: "",
+                  sender: "You",
+                  context: _currentSender ?? agentController.text,
+                  message: message,
+                  isUser: true,
+                ),
+              );
               _chatController.text = '';
               _chatController.selection = TextSelection.collapsed(offset: 0);
+              _updateSendersFromMessages();
             });
             _chatFocusNode.requestFocus();
-            _socket?.sink.add(message);
+            // Send message with routing info
+            final outgoing = {
+              "message": message,
+              if (_currentSender != null) "to": _currentSender,
+              if (_currentSenderJobId != null) "context": _currentSenderJobId,
+            };
+            _socket?.sink.add(jsonEncode(outgoing));
           }
         });
       } catch (e) {
         setState(() {
           _messages.add(
-            "🤖 Apologies, we're unable to reconnect at the moment. Please try again shortly.",
+            ChatMessage(
+              id: "",
+              sender: "You",
+              context: _currentSender ?? agentController.text,
+              message:
+                  "🤖 Apologies, we're unable to reconnect at the moment. Please try again shortly.",
+              isUser: true,
+            ),
           );
+          _updateSendersFromMessages();
         });
       }
       return;
     }
 
     setState(() {
-      _messages.add("You: $message");
+      _messages.add(
+        ChatMessage(
+          id: "",
+          sender: "You",
+          context: _currentSender ?? agentController.text,
+          message: message,
+          isUser: true,
+        ),
+      );
       _chatController.text = '';
       _chatController.selection = TextSelection.collapsed(offset: 0);
+      _updateSendersFromMessages();
     });
     _chatFocusNode.requestFocus();
-    _socket?.sink.add(message);
+    // Send message with routing info
+    final outgoing = {
+      "message": message,
+      if (_currentSender != null) "to": _currentSender,
+      if (_currentSenderJobId != null) "context": _currentSenderJobId,
+    };
+    _socket?.sink.add(jsonEncode(outgoing));
+  }
+
+  List<ChatMessage> get _filteredMessages {
+    if (_groupMode || _currentSender == null) {
+      return _messages;
+    }
+    return _messages
+        .where(
+          (msg) =>
+              (!msg.isUser &&
+                  msg.sender == _currentSender &&
+                  (_currentSenderJobId == null ||
+                      msg.context == _currentSenderJobId)) ||
+              (msg.isUser),
+        )
+        .toList();
+  }
+
+  void _selectSender(SenderMeta senderMeta) {
+    setState(() {
+      _currentSender = senderMeta.sender;
+      _currentSenderJobId = senderMeta.context;
+      _groupMode = false;
+      // Mark as read
+      for (var s in _senders) {
+        if (s.sender == senderMeta.sender && s.context == senderMeta.context) {
+          s.unread = false;
+        }
+      }
+    });
+  }
+
+  void _returnToGroupView() {
+    setState(() {
+      _groupMode = true;
+      _currentSender = null;
+      _currentSenderJobId = null;
+      // Mark all as read
+      for (var s in _senders) {
+        s.unread = false;
+      }
+    });
+  }
+
+  Color? _statusColor(String status, bool unread) {
+    if (!unread) return null;
+    switch (status) {
+      case 'priority':
+        return Colors.red;
+      case 'finished':
+        return Colors.green;
+      case 'update':
+        return null;
+      default:
+        return null;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFF212121), // dark gray
+      backgroundColor: Color(0xFF212121),
       appBar: AppBar(
         leading: IconButton(
           icon: Icon(Icons.arrow_back),
@@ -765,23 +937,28 @@ class _ChatPageState extends State<ChatPage> {
             LayoutBuilder(
               builder: (context, constraints) {
                 final double maxHeight = constraints.maxHeight * 0.5;
-                final hasData = _facts.isNotEmpty || _preferences.isNotEmpty;
                 final yamlContent = StringBuffer();
-                if (_facts.isNotEmpty) {
-                  yamlContent.writeln("Facts:");
-                  _facts.forEach((key, value) {
-                    yamlContent.writeln("  $key: $value");
-                  });
-                  yamlContent.writeln();
-                }
-                if (_preferences.isNotEmpty) {
-                  yamlContent.writeln("Preferences:");
-                  _preferences.forEach((key, value) {
-                    yamlContent.writeln("  $key: $value");
-                  });
-                }
-                if (!hasData) {
-                  yamlContent.writeln("No facts or preferences.");
+                if (_chatId == null || _chatId!.isEmpty) {
+                  yamlContent.writeln("Start a chat session to view facts.");
+                } else {
+                  final hasData = _facts.isNotEmpty || _observations.isNotEmpty;
+                  if (_facts.isNotEmpty) {
+                    yamlContent.writeln("Facts:");
+                    _facts.forEach((key, value) {
+                      yamlContent.writeln("  $key: $value");
+                    });
+                    yamlContent.writeln();
+                  }
+                  if (_observations.isNotEmpty) {
+                    yamlContent.writeln("Observations:");
+                    _observations.forEach((key, value) {
+                      yamlContent.writeln("  $key: $value");
+                    });
+                    yamlContent.writeln();
+                  }
+                  if (!hasData) {
+                    yamlContent.writeln("No facts or observations.");
+                  }
                 }
 
                 return ConstrainedBox(
@@ -807,21 +984,49 @@ class _ChatPageState extends State<ChatPage> {
           Expanded(
             child: ListView.builder(
               padding: EdgeInsets.all(12),
-              itemCount: _messages.length,
+              itemCount: _filteredMessages.length,
               itemBuilder: (context, index) {
+                final msg = _filteredMessages[index];
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Align(
-                    alignment: Alignment.centerLeft,
+                    alignment:
+                        msg.isUser
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
                     child: Container(
                       padding: EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Color(0xFF424242),
+                        color:
+                            msg.isUser ? Color(0xFF388E3C) : Color(0xFF424242),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Text(
-                        _messages[index],
-                        style: TextStyle(color: Colors.white),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "${msg.sender}${msg.id.isNotEmpty ? " [${msg.id}]" : ""}",
+                            style: TextStyle(
+                              color: Color(0xFF81C784),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          TextSelectionTheme(
+                            data: TextSelectionThemeData(
+                              selectionColor: Colors.yellowAccent.withOpacity(
+                                0.7,
+                              ),
+                              cursorColor: Colors.lightBlueAccent,
+                              selectionHandleColor: Colors.lightBlueAccent,
+                            ),
+                            child: SelectableText(
+                              msg.message,
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -829,6 +1034,81 @@ class _ChatPageState extends State<ChatPage> {
               },
             ),
           ),
+          // Sender icon row
+          if (_senders.isNotEmpty)
+            Container(
+              color: Color(0xFF333333),
+              padding: EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+              child: Row(
+                children: [
+                  ..._senders.map((sender) {
+                    final isSelected =
+                        !_groupMode &&
+                        _currentSender == sender.sender &&
+                        _currentSenderJobId == sender.context;
+                    return GestureDetector(
+                      onTap: () {
+                        _selectSender(sender);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Column(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor:
+                                  isSelected
+                                      ? Colors.blue
+                                      : _statusColor(
+                                            sender.status,
+                                            sender.unread,
+                                          ) ??
+                                          Colors.grey[700],
+                              radius: 14,
+                              child: Text(
+                                sender.sender.isNotEmpty
+                                    ? sender.sender[0].toUpperCase()
+                                    : "?",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              sender.sender,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  Spacer(),
+                  if (!_groupMode)
+                    ElevatedButton(
+                      onPressed: _returnToGroupView,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[800],
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: Text("Return to Group View"),
+                    ),
+                ],
+              ),
+            ),
           Padding(
             padding: EdgeInsets.all(8),
             child: Row(
@@ -855,7 +1135,6 @@ class _ChatPageState extends State<ChatPage> {
                       minLines: 1,
                       maxLines: null,
                       onChanged: (text) => setState(() {}),
-                      // onFieldSubmitted: (_) => _sendMessage(),
                       style: TextStyle(color: Colors.white),
                       decoration: InputDecoration(
                         contentPadding: EdgeInsets.symmetric(
