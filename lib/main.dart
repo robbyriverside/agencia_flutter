@@ -521,6 +521,7 @@ class _ChatPageState extends State<ChatPage> {
   final List<ChatMessage> _messages = [];
   WebSocketChannel? _socket;
   String? _chatId;
+  bool _closingChat = false;
   final FocusNode _chatFocusNode = FocusNode();
   TextEditingController _tempController = TextEditingController();
 
@@ -735,6 +736,78 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  Future<void> _handleBackNavigation() async {
+    if (_closingChat) return;
+
+    final shouldClose = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text('Close Chat?'),
+            content: Text(
+              'Closing the chat will end the current session. Do you want to continue?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: Text('Close Chat'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!shouldClose || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _closingChat = true;
+    });
+
+    String? errorMessage;
+    if (_chatId != null && _chatId!.isNotEmpty) {
+      try {
+        final uri = Uri(
+          path: '/api/closechat',
+          queryParameters: {'chat_id': _chatId!},
+        );
+        final response = await http.post(uri);
+        if (response.statusCode != 204) {
+          errorMessage =
+              'Failed to close chat (HTTP ${response.statusCode}).';
+        }
+      } catch (e) {
+        errorMessage = 'Failed to close chat: $e';
+      }
+    }
+
+    _socket?.sink.close();
+    _socket = null;
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _closingChat = false;
+      _chatId = null;
+      _facts = {};
+      _observations = {};
+    });
+
+    if (errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage)),
+      );
+    }
+
+    Navigator.of(context).pop();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -907,7 +980,7 @@ class _ChatPageState extends State<ChatPage> {
       appBar: AppBar(
         leading: IconButton(
           icon: Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _closingChat ? null : _handleBackNavigation,
         ),
         iconTheme: IconThemeData(color: Colors.white),
         title: Text("Chat", style: TextStyle(color: Colors.white)),
