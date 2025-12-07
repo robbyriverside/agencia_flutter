@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'package:yaml/yaml.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:web_socket_channel/html.dart' as html_ws;
+
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
@@ -45,41 +45,18 @@ class AgenciaApp extends StatelessWidget {
           ),
         ),
       ),
-      home: Scaffold(
-        appBar: PreferredSize(
-          preferredSize: Size.fromHeight(kToolbarHeight),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFFA5D6A7), // fresh light green
-                  Color(0xFF2E7D32), // deep green (center)
-                  // Color(0xFFA5D6A7), // fresh light green
-                ],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                stops: [0.0, 0.5],
-              ),
-            ),
-            child: AppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              title: Text('Agencia {{Ai}}'),
-            ),
-          ),
-        ),
-        body: AgenciaForm(),
-      ),
+      home: HomePage(),
     );
   }
 }
 
-class AgenciaForm extends StatefulWidget {
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
   @override
-  _AgenciaFormState createState() => _AgenciaFormState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _AgenciaFormState extends State<AgenciaForm>
+class _HomePageState extends State<HomePage>
     with SingleTickerProviderStateMixin {
   late TextEditingController specController;
   // final inputController = TextEditingController(text: 'world');
@@ -91,6 +68,59 @@ class _AgenciaFormState extends State<AgenciaForm>
 
   late AnimationController _logoController;
   late Animation<double> _logoAnimation;
+
+  // One-Shot/Run UI State
+  bool _showOneShotPane = false;
+  final TextEditingController _oneShotInputController = TextEditingController();
+  final TextEditingController _oneShotOutputController =
+      TextEditingController();
+  bool _isRunningOneShot = false;
+  // Tabs: 0=Output, 1=Facts, 2=Observations
+  int _oneShotTabIndex = 0;
+  Map<String, dynamic> _oneShotFacts = {};
+  Map<String, dynamic> _oneShotObservations = {};
+
+  Future<void> _runOneShot() async {
+    setState(() {
+      _isRunningOneShot = true;
+      _oneShotOutputController.text = "Running...";
+    });
+
+    try {
+      final uri = Uri.parse('/api/run');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'spec': specController.text,
+          'agent': agentController.text,
+          'input': _oneShotInputController.text,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _oneShotOutputController.text = data['output']?.toString() ?? '';
+          _oneShotFacts = data['facts'] ?? {};
+          _oneShotObservations = data['observations'] ?? {};
+        });
+      } else {
+        setState(() {
+          _oneShotOutputController.text =
+              "Error: ${response.statusCode}\n${response.body}";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _oneShotOutputController.text = "Error: $e";
+      });
+    } finally {
+      setState(() {
+        _isRunningOneShot = false;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -168,11 +198,10 @@ agents:
   Future<void> chatAgent() async {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder:
-            (_) => ChatPage(
-              agentController: agentController,
-              specController: specController,
-            ),
+        builder: (_) => ChatPage(
+          agentController: agentController,
+          specController: specController,
+        ),
       ),
     );
   }
@@ -204,191 +233,388 @@ agents:
     var winWidth = MediaQuery.of(context).size.width;
     var isMobile = winWidth < 400;
     var isTablet = winWidth < 1050;
-    return Padding(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+
+    return Scaffold(
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(kToolbarHeight),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFFA5D6A7), // fresh light green
+                Color(0xFF2E7D32), // deep green (center)
+              ],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              stops: [0.0, 0.5],
+            ),
+          ),
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            title: Text('Agencia {{Ai}}'),
+            actions: [
+              IconButton(
+                icon: Icon(
+                  _showOneShotPane
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  color: Colors.white,
+                ),
+                tooltip: "One-Shot Run",
+                onPressed: () {
+                  setState(() {
+                    _showOneShotPane = !_showOneShotPane;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      body: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              Column(
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.start,
+          if (_showOneShotPane)
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+              ),
+              height: 380, // Fixed height or max height
+              child: Column(
                 children: [
-                  Text("Starting Agent", style: TextStyle(color: Colors.black)),
-                  SizedBox(height: 4),
                   Row(
                     children: [
-                      SizedBox(
-                        width: MediaQuery.of(context).size.width * 0.35,
-                        child: TextSelectionTheme(
-                          data: TextSelectionThemeData(
-                            selectionColor: Colors.lightBlueAccent.withValues(
-                              alpha: 0.5,
-                            ),
-                            cursorColor: Colors.lightBlueAccent,
-                            selectionHandleColor: Colors.lightBlueAccent,
-                          ),
-                          child: TextField(
-                            controller: agentController,
-                            maxLines: 1,
-                            decoration: InputDecoration(
-                              border: OutlineInputBorder(),
-                            ),
+                      Expanded(
+                        child: TextField(
+                          controller: _oneShotInputController,
+                          maxLines: 2,
+                          decoration: InputDecoration(
+                            labelText: "Input",
+                            hintText: "Enter input for the agent",
+                            border: OutlineInputBorder(),
                           ),
                         ),
                       ),
-                      SizedBox(width: 6),
+                      SizedBox(width: 8),
+                      // ... Button ...
                       ElevatedButton(
-                        onPressed: chatAgent,
+                        onPressed: _isRunningOneShot ? null : _runOneShot,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF2E7D32), // deep green
+                          backgroundColor: Color(0xFF2E7D32),
                           foregroundColor: Colors.white,
                           padding: EdgeInsets.symmetric(
-                            horizontal: 28,
-                            vertical: 14,
+                            horizontal: 20,
+                            vertical: 20,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 6,
-                          shadowColor: Colors.black54,
-                        ).copyWith(
-                          padding: WidgetStateProperty.all(
-                            EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                          ),
-                          alignment: Alignment.center,
                         ),
-                        child: Text(
-                          "Chat",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Colors.white,
+                        child: _isRunningOneShot
+                            ? CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              )
+                            : Text("Run"),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  // Tabs for Output | Flags | Observations
+                  Row(
+                    children: [
+                      for (int i = 0; i < 3; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _oneShotTabIndex = i;
+                              });
+                            },
+                            style: TextButton.styleFrom(
+                              backgroundColor: _oneShotTabIndex == i
+                                  ? Color(0xFF2E7D32)
+                                  : Colors.grey.shade200,
+                              foregroundColor: _oneShotTabIndex == i
+                                  ? Colors.white
+                                  : Colors.black,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                            ),
+                            child: Text(
+                              ["Output", "Facts", "Observations"][i],
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  Expanded(
+                    child: _oneShotTabIndex == 0
+                        ? TextField(
+                            controller: _oneShotOutputController,
+                            maxLines: null,
+                            readOnly: true,
+                            expands: true,
+                            textAlignVertical: TextAlignVertical.top,
+                            decoration: InputDecoration(
+                              hintText: "Output will appear here...",
+                              filled: true,
+                              fillColor: Colors.grey.shade100,
+                              border: OutlineInputBorder(),
+                            ),
+                            style: TextStyle(fontFamily: 'monospace'),
+                          )
+                        : Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              border: Border.all(color: Colors.grey),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: SingleChildScrollView(
+                              child: SelectableText(
+                                _oneShotTabIndex == 1
+                                    ? (_oneShotFacts.isEmpty
+                                          ? "No facts returned."
+                                          : JsonEncoder.withIndent(
+                                              '  ',
+                                            ).convert(_oneShotFacts))
+                                    : (_oneShotObservations.isEmpty
+                                          ? "No observations returned."
+                                          : JsonEncoder.withIndent(
+                                              '  ',
+                                            ).convert(_oneShotObservations)),
+                                style: TextStyle(fontFamily: 'monospace'),
+                              ),
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Starting Agent",
+                            style: TextStyle(color: Colors.black),
+                          ),
+                          SizedBox(height: 4),
+                          Row(
+                            children: [
+                              SizedBox(
+                                width: MediaQuery.of(context).size.width * 0.35,
+                                child: TextSelectionTheme(
+                                  data: TextSelectionThemeData(
+                                    selectionColor: Colors.lightBlueAccent
+                                        .withValues(alpha: 0.5),
+                                    cursorColor: Colors.lightBlueAccent,
+                                    selectionHandleColor:
+                                        Colors.lightBlueAccent,
+                                  ),
+                                  child: TextField(
+                                    controller: agentController,
+                                    maxLines: 1,
+                                    decoration: InputDecoration(
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 6),
+                              ElevatedButton(
+                                onPressed: chatAgent,
+                                style:
+                                    ElevatedButton.styleFrom(
+                                      backgroundColor: Color(
+                                        0xFF2E7D32,
+                                      ), // deep green
+                                      foregroundColor: Colors.white,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 28,
+                                        vertical: 14,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      elevation: 6,
+                                      shadowColor: Colors.black54,
+                                    ).copyWith(
+                                      padding: WidgetStateProperty.all(
+                                        EdgeInsets.symmetric(
+                                          horizontal: 28,
+                                          vertical: 14,
+                                        ),
+                                      ),
+                                      alignment: Alignment.center,
+                                    ),
+                                child: Text(
+                                  "Chat",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 4),
+                            ],
+                          ),
+                        ],
+                      ),
+                      // Agencia symbol to the right of Run button
+                      Expanded(
+                        child: Container(
+                          alignment: Alignment.center,
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Color(
+                                0xFFF1D8C4,
+                              ), // lighter soft complementary background
+                              border: Border.all(
+                                color: Color(0xFF2E7D32),
+                                width: 1.5,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              (isTablet)
+                                  ? ((isMobile)
+                                        ? "{{Ai}}"
+                                        : " Agentic\n   {{Ai}} \nDesigner")
+                                  : " Agentic {{Ai}} Designer ",
+                              style: GoogleFonts.audiowide(
+                                textStyle: TextStyle(
+                                  fontSize: (isTablet) ? 16 : 28,
+                                  fontWeight: FontWeight.normal,
+                                  color: Color(0xFF2E7D32),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
+
                       SizedBox(width: 4),
                     ],
                   ),
-                ],
-              ),
-              // Agencia symbol to the right of Run button
-              Expanded(
-                child: Container(
-                  alignment: Alignment.center,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Color(
-                        0xFFF1D8C4,
-                      ), // lighter soft complementary background
-                      border: Border.all(color: Color(0xFF2E7D32), width: 1.5),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      (isTablet)
-                          ? ((isMobile)
-                              ? "{{Ai}}"
-                              : " Agentic\n   {{Ai}} \nDesigner")
-                          : " Agentic {{Ai}} Designer ",
-                      style: GoogleFonts.audiowide(
-                        textStyle: TextStyle(
-                          fontSize: (isTablet) ? 16 : 28,
-                          fontWeight: FontWeight.normal,
-                          color: Color(0xFF2E7D32),
+                  SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "{{Ai}} Agents",
+                        style: TextStyle(color: Colors.black),
+                      ),
+                      Row(
+                        children: [
+                          ElevatedButton(
+                            onPressed: () async {
+                              final bytes = Uint8List.fromList(
+                                utf8.encode(specController.text),
+                              );
+                              await FileSaver.instance.saveFile(
+                                name: "agencia",
+                                bytes: bytes,
+                                ext: "yaml",
+                                mimeType: MimeType.text,
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color(0xFF2E7D32), // deep green
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              minimumSize: Size(0, 0),
+                            ),
+                            child: Text(
+                              "Save",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      SpecEditorPage(specController),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color(0xFF2E7D32), // deep green
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              minimumSize: Size(0, 0),
+                            ),
+                            child: Text(
+                              "Edit",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 4),
+                  Expanded(
+                    child: Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        border: Border.all(color: Colors.grey),
+                      ),
+                      child: TextSelectionTheme(
+                        data: TextSelectionThemeData(
+                          selectionColor: Colors.lightBlueAccent.withValues(
+                            alpha: 0.5,
+                          ),
+                          cursorColor: Colors.lightBlueAccent,
+                          selectionHandleColor: Colors.lightBlueAccent,
+                        ),
+                        child: TextField(
+                          controller: specController,
+                          maxLines: null,
+                          expands: true,
+                          textAlignVertical: TextAlignVertical.top,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontFamily: 'Roboto',
+                            color: Colors.white,
+                          ),
+                          decoration: InputDecoration.collapsed(hintText: null),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-
-              SizedBox(width: 4),
-            ],
-          ),
-          SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text("{{Ai}} Agents", style: TextStyle(color: Colors.black)),
-              Row(
-                children: [
-                  ElevatedButton(
-                    onPressed: () async {
-                      final bytes = Uint8List.fromList(
-                        utf8.encode(specController.text),
-                      );
-                      await FileSaver.instance.saveFile(
-                        name: "agencia",
-                        bytes: bytes,
-                        ext: "yaml",
-                        mimeType: MimeType.text,
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF2E7D32), // deep green
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      minimumSize: Size(0, 0),
-                    ),
-                    child: Text("Save", style: TextStyle(color: Colors.white)),
-                  ),
-                  SizedBox(width: 4),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => SpecEditorPage(specController),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF2E7D32), // deep green
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      minimumSize: Size(0, 0),
-                    ),
-                    child: Text("Edit", style: TextStyle(color: Colors.white)),
-                  ),
                 ],
-              ),
-            ],
-          ),
-          SizedBox(height: 4),
-          Expanded(
-            child: Container(
-              height: 400,
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                border: Border.all(color: Colors.grey),
-              ),
-              child: TextSelectionTheme(
-                data: TextSelectionThemeData(
-                  selectionColor: Colors.lightBlueAccent.withValues(alpha: 0.5),
-                  cursorColor: Colors.lightBlueAccent,
-                  selectionHandleColor: Colors.lightBlueAccent,
-                ),
-                child: TextField(
-                  controller: specController,
-                  maxLines: null,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontFamily: 'Roboto',
-                    color: Colors.white,
-                  ),
-                  decoration: InputDecoration.collapsed(hintText: null),
-                ),
               ),
             ),
           ),
@@ -401,7 +627,7 @@ agents:
 class SpecEditorPage extends StatelessWidget {
   final TextEditingController specController;
 
-  SpecEditorPage(this.specController, {super.key});
+  const SpecEditorPage(this.specController, {super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -423,7 +649,7 @@ class SpecEditorPage extends StatelessWidget {
         child: SizedBox.expand(
           child: TextSelectionTheme(
             data: TextSelectionThemeData(
-              selectionColor: Colors.lightBlueAccent.withOpacity(0.5),
+              selectionColor: Colors.lightBlueAccent.withValues(alpha: 0.5),
               cursorColor: Colors.lightBlueAccent,
               selectionHandleColor: Colors.lightBlueAccent,
             ),
@@ -523,7 +749,6 @@ class _ChatPageState extends State<ChatPage> {
   String? _chatId;
   bool _closingChat = false;
   final FocusNode _chatFocusNode = FocusNode();
-  TextEditingController _tempController = TextEditingController();
 
   // Facts and observationsstate
   bool _showFactsPane = false;
@@ -557,7 +782,7 @@ class _ChatPageState extends State<ChatPage> {
         });
       }
     } catch (e) {
-      print("Failed to load facts/observations: $e");
+      debugPrint("Failed to load facts/observations: $e");
     }
   }
 
@@ -624,8 +849,8 @@ class _ChatPageState extends State<ChatPage> {
       _observations = {};
     });
     try {
-      _socket = html_ws.HtmlWebSocketChannel.connect(
-        'ws://localhost:8080/api/chat',
+      _socket = WebSocketChannel.connect(
+        Uri.parse('ws://localhost:8080/api/chat'),
       );
       _socket!.sink.add(
         jsonEncode({
@@ -634,7 +859,7 @@ class _ChatPageState extends State<ChatPage> {
         }),
       );
     } catch (e) {
-      print("WebSocket creation error: $e");
+      debugPrint("WebSocket creation error: $e");
       return;
     }
 
@@ -674,10 +899,9 @@ class _ChatPageState extends State<ChatPage> {
                 decoded.containsKey('message')) {
               // Extract message string, handling nested JSON object
               final msgField = decoded['message'];
-              final msgString =
-                  msgField is Map
-                      ? msgField['message']?.toString() ?? jsonEncode(msgField)
-                      : msgField.toString();
+              final msgString = msgField is Map
+                  ? msgField['message']?.toString() ?? jsonEncode(msgField)
+                  : msgField.toString();
               _messages.add(
                 ChatMessage(
                   id: decoded['id'].toString(),
@@ -714,7 +938,7 @@ class _ChatPageState extends State<ChatPage> {
         });
       },
       onDone: () {
-        print("WebSocket closed.");
+        debugPrint("WebSocket connection closed");
         _socket = null;
         if (!mounted) {
           return;
@@ -724,7 +948,7 @@ class _ChatPageState extends State<ChatPage> {
         });
       },
       onError: (error) {
-        print("WebSocket error: $error");
+        debugPrint("WebSocket error: $error");
         _socket = null;
         if (!mounted) {
           return;
@@ -739,7 +963,8 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _handleBackNavigation() async {
     if (_closingChat) return;
 
-    final shouldClose = await showDialog<bool>(
+    final shouldClose =
+        await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: Text('Close Chat?'),
@@ -777,8 +1002,7 @@ class _ChatPageState extends State<ChatPage> {
         );
         final response = await http.post(uri);
         if (response.statusCode != 204) {
-          errorMessage =
-              'Failed to close chat (HTTP ${response.statusCode}).';
+          errorMessage = 'Failed to close chat (HTTP ${response.statusCode}).';
         }
       } catch (e) {
         errorMessage = 'Failed to close chat: $e';
@@ -800,9 +1024,9 @@ class _ChatPageState extends State<ChatPage> {
     });
 
     if (errorMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errorMessage)));
     }
 
     Navigator.of(context).pop();
@@ -1063,15 +1287,15 @@ class _ChatPageState extends State<ChatPage> {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Align(
-                    alignment:
-                        msg.isUser
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
+                    alignment: msg.isUser
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
                     child: Container(
                       padding: EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color:
-                            msg.isUser ? Color(0xFF388E3C) : Color(0xFF424242),
+                        color: msg.isUser
+                            ? Color(0xFF388E3C)
+                            : Color(0xFF424242),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Column(
@@ -1088,8 +1312,8 @@ class _ChatPageState extends State<ChatPage> {
                           SizedBox(height: 2),
                           TextSelectionTheme(
                             data: TextSelectionThemeData(
-                              selectionColor: Colors.yellowAccent.withOpacity(
-                                0.7,
+                              selectionColor: Colors.yellowAccent.withValues(
+                                alpha: 0.7,
                               ),
                               cursorColor: Colors.lightBlueAccent,
                               selectionHandleColor: Colors.lightBlueAccent,
@@ -1128,14 +1352,13 @@ class _ChatPageState extends State<ChatPage> {
                         child: Column(
                           children: [
                             CircleAvatar(
-                              backgroundColor:
-                                  isSelected
-                                      ? Colors.blue
-                                      : _statusColor(
-                                            sender.status,
-                                            sender.unread,
-                                          ) ??
-                                          Colors.grey[700],
+                              backgroundColor: isSelected
+                                  ? Colors.blue
+                                  : _statusColor(
+                                          sender.status,
+                                          sender.unread,
+                                        ) ??
+                                        Colors.grey[700],
                               radius: 14,
                               child: Text(
                                 sender.sender.isNotEmpty
@@ -1160,7 +1383,7 @@ class _ChatPageState extends State<ChatPage> {
                         ),
                       ),
                     );
-                  }).toList(),
+                  }),
                   Spacer(),
                   if (!_groupMode)
                     ElevatedButton(
