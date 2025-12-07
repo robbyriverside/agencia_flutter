@@ -1,12 +1,13 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'dart:async';
 import 'dart:convert';
 import 'package:yaml/yaml.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'services/agencia_service.dart';
+import 'services/service_factory.dart';
 
 void main() {
   runApp(AgenciaApp());
@@ -58,6 +59,8 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage>
     with SingleTickerProviderStateMixin {
+  late final AgenciaService _service;
+
   late TextEditingController specController;
   // final inputController = TextEditingController(text: 'world');
   final agentController = TextEditingController(text: 'greet');
@@ -87,30 +90,17 @@ class _HomePageState extends State<HomePage>
     });
 
     try {
-      final uri = Uri.parse('/api/run');
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'spec': specController.text,
-          'agent': agentController.text,
-          'input': _oneShotInputController.text,
-        }),
+      final result = await _service.runOneShot(
+        specController.text,
+        agentController.text,
+        _oneShotInputController.text,
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _oneShotOutputController.text = data['output']?.toString() ?? '';
-          _oneShotFacts = data['facts'] ?? {};
-          _oneShotObservations = data['observations'] ?? {};
-        });
-      } else {
-        setState(() {
-          _oneShotOutputController.text =
-              "Error: ${response.statusCode}\n${response.body}";
-        });
-      }
+      setState(() {
+        _oneShotOutputController.text = result['output']?.toString() ?? '';
+        _oneShotFacts = result['facts'] ?? {};
+        _oneShotObservations = result['observations'] ?? {};
+      });
     } catch (e) {
       setState(() {
         _oneShotOutputController.text = "Error: $e";
@@ -130,7 +120,7 @@ class _HomePageState extends State<HomePage>
 agents:
   greet:
     template: |
-      Hello, {{ .Input }}!
+      Hello, {{ INPUT }}!
 ''',
     );
     _logoController = AnimationController(
@@ -140,11 +130,13 @@ agents:
     _logoAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
       CurvedAnimation(parent: _logoController, curve: Curves.easeInOut),
     );
+    _service = createAgenciaService();
   }
 
   @override
   void dispose() {
     _logoController.dispose();
+    _service.dispose();
     super.dispose();
   }
 
@@ -198,10 +190,12 @@ agents:
   Future<void> chatAgent() async {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ChatPage(
-          agentController: agentController,
-          specController: specController,
-        ),
+        builder:
+            (_) => ChatPage(
+              agentController: agentController,
+              specController: specController,
+              service: _service,
+            ),
       ),
     );
   }
@@ -309,12 +303,13 @@ agents:
                             vertical: 20,
                           ),
                         ),
-                        child: _isRunningOneShot
-                            ? CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              )
-                            : Text("Run"),
+                        child:
+                            _isRunningOneShot
+                                ? CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                )
+                                : Text("Run"),
                       ),
                     ],
                   ),
@@ -332,12 +327,14 @@ agents:
                               });
                             },
                             style: TextButton.styleFrom(
-                              backgroundColor: _oneShotTabIndex == i
-                                  ? Color(0xFF2E7D32)
-                                  : Colors.grey.shade200,
-                              foregroundColor: _oneShotTabIndex == i
-                                  ? Colors.white
-                                  : Colors.black,
+                              backgroundColor:
+                                  _oneShotTabIndex == i
+                                      ? Color(0xFF2E7D32)
+                                      : Colors.grey.shade200,
+                              foregroundColor:
+                                  _oneShotTabIndex == i
+                                      ? Colors.white
+                                      : Colors.black,
                               padding: EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 8,
@@ -353,46 +350,47 @@ agents:
                   ),
                   SizedBox(height: 8),
                   Expanded(
-                    child: _oneShotTabIndex == 0
-                        ? TextField(
-                            controller: _oneShotOutputController,
-                            maxLines: null,
-                            readOnly: true,
-                            expands: true,
-                            textAlignVertical: TextAlignVertical.top,
-                            decoration: InputDecoration(
-                              hintText: "Output will appear here...",
-                              filled: true,
-                              fillColor: Colors.grey.shade100,
-                              border: OutlineInputBorder(),
-                            ),
-                            style: TextStyle(fontFamily: 'monospace'),
-                          )
-                        : Container(
-                            width: double.infinity,
-                            padding: EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade100,
-                              border: Border.all(color: Colors.grey),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: SingleChildScrollView(
-                              child: SelectableText(
-                                _oneShotTabIndex == 1
-                                    ? (_oneShotFacts.isEmpty
+                    child:
+                        _oneShotTabIndex == 0
+                            ? TextField(
+                              controller: _oneShotOutputController,
+                              maxLines: null,
+                              readOnly: true,
+                              expands: true,
+                              textAlignVertical: TextAlignVertical.top,
+                              decoration: InputDecoration(
+                                hintText: "Output will appear here...",
+                                filled: true,
+                                fillColor: Colors.grey.shade100,
+                                border: OutlineInputBorder(),
+                              ),
+                              style: TextStyle(fontFamily: 'monospace'),
+                            )
+                            : Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                border: Border.all(color: Colors.grey),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: SingleChildScrollView(
+                                child: SelectableText(
+                                  _oneShotTabIndex == 1
+                                      ? (_oneShotFacts.isEmpty
                                           ? "No facts returned."
                                           : JsonEncoder.withIndent(
-                                              '  ',
-                                            ).convert(_oneShotFacts))
-                                    : (_oneShotObservations.isEmpty
+                                            '  ',
+                                          ).convert(_oneShotFacts))
+                                      : (_oneShotObservations.isEmpty
                                           ? "No observations returned."
                                           : JsonEncoder.withIndent(
-                                              '  ',
-                                            ).convert(_oneShotObservations)),
-                                style: TextStyle(fontFamily: 'monospace'),
+                                            '  ',
+                                          ).convert(_oneShotObservations)),
+                                  style: TextStyle(fontFamily: 'monospace'),
+                                ),
                               ),
                             ),
-                          ),
                   ),
                 ],
               ),
@@ -439,30 +437,29 @@ agents:
                               SizedBox(width: 6),
                               ElevatedButton(
                                 onPressed: chatAgent,
-                                style:
-                                    ElevatedButton.styleFrom(
-                                      backgroundColor: Color(
-                                        0xFF2E7D32,
-                                      ), // deep green
-                                      foregroundColor: Colors.white,
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 28,
-                                        vertical: 14,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      elevation: 6,
-                                      shadowColor: Colors.black54,
-                                    ).copyWith(
-                                      padding: WidgetStateProperty.all(
-                                        EdgeInsets.symmetric(
-                                          horizontal: 28,
-                                          vertical: 14,
-                                        ),
-                                      ),
-                                      alignment: Alignment.center,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Color(
+                                    0xFF2E7D32,
+                                  ), // deep green
+                                  foregroundColor: Colors.white,
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 28,
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 6,
+                                  shadowColor: Colors.black54,
+                                ).copyWith(
+                                  padding: WidgetStateProperty.all(
+                                    EdgeInsets.symmetric(
+                                      horizontal: 28,
+                                      vertical: 14,
                                     ),
+                                  ),
+                                  alignment: Alignment.center,
+                                ),
                                 child: Text(
                                   "Chat",
                                   style: TextStyle(
@@ -499,8 +496,8 @@ agents:
                             child: Text(
                               (isTablet)
                                   ? ((isMobile)
-                                        ? "{{Ai}}"
-                                        : " Agentic\n   {{Ai}} \nDesigner")
+                                      ? "{{Ai}}"
+                                      : " Agentic\n   {{Ai}} \nDesigner")
                                   : " Agentic {{Ai}} Designer ",
                               style: GoogleFonts.audiowide(
                                 textStyle: TextStyle(
@@ -559,8 +556,8 @@ agents:
                             onPressed: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) =>
-                                      SpecEditorPage(specController),
+                                  builder:
+                                      (_) => SpecEditorPage(specController),
                                 ),
                               );
                             },
@@ -675,11 +672,13 @@ class SpecEditorPage extends StatelessWidget {
 class ChatPage extends StatefulWidget {
   final TextEditingController agentController;
   final TextEditingController specController;
+  final AgenciaService service;
 
   const ChatPage({
     super.key,
     required this.agentController,
     required this.specController,
+    required this.service,
   });
 
   @override
@@ -745,10 +744,11 @@ class SenderMeta {
 class _ChatPageState extends State<ChatPage> {
   final TextEditingController _chatController = TextEditingController();
   final List<ChatMessage> _messages = [];
-  WebSocketChannel? _socket;
   String? _chatId;
   bool _closingChat = false;
   final FocusNode _chatFocusNode = FocusNode();
+  StreamSubscription? _streamSubscription;
+  bool _connectionInProgress = false;
 
   // Facts and observationsstate
   bool _showFactsPane = false;
@@ -769,18 +769,11 @@ class _ChatPageState extends State<ChatPage> {
       return;
     }
     try {
-      final uri = Uri(
-        path: '/api/facts',
-        queryParameters: {'chat_id': _chatId!},
-      );
-      final response = await http.get(uri);
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _facts = data['facts'] ?? {};
-          _observations = data['observations'] ?? {};
-        });
-      }
+      final data = await widget.service.getFacts(_chatId!);
+      setState(() {
+        _facts = data['facts'] ?? {};
+        _observations = data['observations'] ?? {};
+      });
     } catch (e) {
       debugPrint("Failed to load facts/observations: $e");
     }
@@ -842,73 +835,89 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  void _connectWebSocket() {
+  // Renamed from _connectWebSocket
+  void _connectChat() {
+    if (_connectionInProgress) {
+      return;
+    }
+    _connectionInProgress = true;
+
     setState(() {
       _chatId = null;
       _facts = {};
       _observations = {};
     });
-    try {
-      _socket = WebSocketChannel.connect(
-        Uri.parse('ws://localhost:8080/api/chat'),
-      );
-      _socket!.sink.add(
-        jsonEncode({
-          "agent": agentController.text,
-          "spec": specController.text,
-        }),
-      );
-    } catch (e) {
-      debugPrint("WebSocket creation error: $e");
-      return;
-    }
 
-    _socket!.stream.listen(
-      (event) {
-        dynamic decoded;
-        try {
-          decoded = jsonDecode(event);
-        } catch (_) {
-          decoded = null;
+    _streamSubscription?.cancel();
+    _streamSubscription = null;
+
+    final stream = widget.service.connectChat(
+      specController.text,
+      agentController.text,
+    );
+
+    _streamSubscription = stream.listen(
+      (decoded) {
+        if (!mounted) return;
+
+        // Reset connecting state on specific events
+        if (decoded is Map) {
+          if (decoded['type'] == 'connected' || decoded['type'] == 'error') {
+            // We don't setState here separately to avoid rebuilding unnecessarily if we do it below
+            // But we need to clear the flag.
+            _connectionInProgress = false;
+          }
         }
 
-        if (decoded is Map && decoded['type'] == 'chat_init') {
-          final newChatId = decoded['chat_id']?.toString();
-          if (mounted && newChatId != null && newChatId.isNotEmpty) {
+        if (decoded is Map) {
+          if (decoded['type'] == 'chat_init') {
+            final newChatId = decoded['chat_id']?.toString();
+            if (newChatId != null && newChatId.isNotEmpty) {
+              setState(() {
+                _chatId = newChatId;
+                _connectionInProgress = false;
+              });
+              if (_showFactsPane) {
+                _loadFactsAndPrefs();
+              }
+            }
+            return;
+          }
+          if (decoded['type'] == 'connected') {
             setState(() {
-              _chatId = newChatId;
+              _chatId = "local_session";
+              _connectionInProgress = false;
             });
             if (_showFactsPane) {
               _loadFactsAndPrefs();
             }
+            return;
           }
-          return;
-        }
-
-        if (!mounted) {
-          return;
         }
 
         setState(() {
           try {
             // Accept both structured and fallback to string for dev
             if (decoded is Map &&
-                decoded.containsKey('id') &&
                 decoded.containsKey('sender') &&
-                decoded.containsKey('context') &&
                 decoded.containsKey('message')) {
               // Extract message string, handling nested JSON object
               final msgField = decoded['message'];
-              final msgString = msgField is Map
-                  ? msgField['message']?.toString() ?? jsonEncode(msgField)
-                  : msgField.toString();
+              final msgString =
+                  msgField is Map
+                      ? msgField['message']?.toString() ?? jsonEncode(msgField)
+                      : msgField.toString();
+
+              final id = decoded['id']?.toString() ?? UniqueKey().toString();
+              final context = decoded['context']?.toString() ?? "";
+
               _messages.add(
                 ChatMessage(
-                  id: decoded['id'].toString(),
+                  id: id,
                   sender: decoded['sender'].toString(),
-                  context: decoded['context'].toString(),
+                  context: context,
                   message: msgString,
-                  isUser: false,
+                  isUser: decoded['isUser'] == true,
                 ),
               );
             } else {
@@ -918,43 +927,36 @@ class _ChatPageState extends State<ChatPage> {
                   id: UniqueKey().toString(),
                   sender: "Agent",
                   context: "",
-                  message: event.toString(),
+                  message: decoded.toString(),
                   isUser: false,
                 ),
               );
             }
           } catch (e) {
-            _messages.add(
-              ChatMessage(
-                id: UniqueKey().toString(),
-                sender: "Agent",
-                context: "",
-                message: event.toString(),
-                isUser: false,
-              ),
-            );
+            debugPrint("Error processing chat message: $e");
+            // Error handling
           }
           _updateSendersFromMessages();
         });
       },
       onDone: () {
-        debugPrint("WebSocket connection closed");
-        _socket = null;
+        debugPrint("Chat stream closed");
         if (!mounted) {
           return;
         }
         setState(() {
           _chatId = null;
+          _connectionInProgress = false;
         });
       },
       onError: (error) {
-        debugPrint("WebSocket error: $error");
-        _socket = null;
+        debugPrint("Chat error: $error");
         if (!mounted) {
           return;
         }
         setState(() {
           _chatId = null;
+          _connectionInProgress = false;
         });
       },
     );
@@ -966,22 +968,23 @@ class _ChatPageState extends State<ChatPage> {
     final shouldClose =
         await showDialog<bool>(
           context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: Text('Close Chat?'),
-            content: Text(
-              'Closing the chat will end the current session. Do you want to continue?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: Text('Cancel'),
+          builder:
+              (dialogContext) => AlertDialog(
+                title: Text('Close Chat?'),
+                content: Text(
+                  'Closing the chat will end the current session. Do you want to continue?',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: Text('Close Chat'),
+                  ),
+                ],
               ),
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: Text('Close Chat'),
-              ),
-            ],
-          ),
         ) ??
         false;
 
@@ -993,24 +996,8 @@ class _ChatPageState extends State<ChatPage> {
       _closingChat = true;
     });
 
-    String? errorMessage;
-    if (_chatId != null && _chatId!.isNotEmpty) {
-      try {
-        final uri = Uri(
-          path: '/api/closechat',
-          queryParameters: {'chat_id': _chatId!},
-        );
-        final response = await http.post(uri);
-        if (response.statusCode != 204) {
-          errorMessage = 'Failed to close chat (HTTP ${response.statusCode}).';
-        }
-      } catch (e) {
-        errorMessage = 'Failed to close chat: $e';
-      }
-    }
-
-    _socket?.sink.close();
-    _socket = null;
+    // Close chat via service (which might call API or dispose local session)
+    widget.service.closeCurrentChat();
 
     if (!mounted) {
       return;
@@ -1022,12 +1009,6 @@ class _ChatPageState extends State<ChatPage> {
       _facts = {};
       _observations = {};
     });
-
-    if (errorMessage != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(errorMessage)));
-    }
 
     Navigator.of(context).pop();
   }
@@ -1044,77 +1025,39 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
-    _socket?.sink.close();
+    // Service dispose is handled by HomePage, valid here?
+    // We should ensure current chat is closed if we pop
+    // But _handleBackNavigation does it.
+    // If popped by other means (e.g. Android back button logic which calls handleBackNavigation if configured), fine.
+    // If purely disposed, we might want to ensure termination?
+    // Let's rely on service.closeCurrentChat call logic.
+    // Ideally we'd call widget.service.closeCurrentChat() here just in case?
+    // It's safe to call multiple times.
+    widget.service.closeCurrentChat();
+
     _chatController.dispose();
     _chatFocusNode.dispose();
     super.dispose();
   }
 
+  // Debounce tracking
+  DateTime? _lastMessageTime;
+
   void _sendMessage() {
+    final now = DateTime.now();
+    if (_lastMessageTime != null &&
+        now.difference(_lastMessageTime!) < Duration(milliseconds: 500)) {
+      return;
+    }
+    _lastMessageTime = now;
+
     final raw = _chatController.text;
     final message = raw.trimRight();
     if (message.isEmpty) return;
 
-    // Only (re)connect if socket is null (closed/disconnected)
-    if (_socket == null) {
-      try {
-        _connectWebSocket();
-        Future.delayed(Duration(milliseconds: 500), () {
-          if (_socket == null) {
-            setState(() {
-              _messages.add(
-                ChatMessage(
-                  id: "",
-                  sender: "You",
-                  context: _currentSender ?? agentController.text,
-                  message:
-                      "🤖 Sorry, I'm currently disconnected and couldn't send your message. Please try again later.",
-                  isUser: true,
-                ),
-              );
-              _updateSendersFromMessages();
-            });
-          } else {
-            setState(() {
-              _messages.add(
-                ChatMessage(
-                  id: "",
-                  sender: "You",
-                  context: _currentSender ?? agentController.text,
-                  message: message,
-                  isUser: true,
-                ),
-              );
-              _chatController.text = '';
-              _chatController.selection = TextSelection.collapsed(offset: 0);
-              _updateSendersFromMessages();
-            });
-            _chatFocusNode.requestFocus();
-            // Send message with routing info
-            final outgoing = {
-              "message": message,
-              if (_currentSender != null) "to": _currentSender,
-              if (_currentSenderJobId != null) "context": _currentSenderJobId,
-            };
-            _socket?.sink.add(jsonEncode(outgoing));
-          }
-        });
-      } catch (e) {
-        setState(() {
-          _messages.add(
-            ChatMessage(
-              id: "",
-              sender: "You",
-              context: _currentSender ?? agentController.text,
-              message:
-                  "🤖 Apologies, we're unable to reconnect at the moment. Please try again shortly.",
-              isUser: true,
-            ),
-          );
-          _updateSendersFromMessages();
-        });
-      }
-      return;
+    if (_chatId == null) {
+      // Try to connect
+      _connectChat();
     }
 
     setState(() {
@@ -1132,13 +1075,9 @@ class _ChatPageState extends State<ChatPage> {
       _updateSendersFromMessages();
     });
     _chatFocusNode.requestFocus();
-    // Send message with routing info
-    final outgoing = {
-      "message": message,
-      if (_currentSender != null) "to": _currentSender,
-      if (_currentSenderJobId != null) "context": _currentSenderJobId,
-    };
-    _socket?.sink.add(jsonEncode(outgoing));
+
+    // Send
+    widget.service.sendChatMessage(message);
   }
 
   List<ChatMessage> get _filteredMessages {
@@ -1287,24 +1226,24 @@ class _ChatPageState extends State<ChatPage> {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Align(
-                    alignment: msg.isUser
-                        ? Alignment.centerRight
-                        : Alignment.centerLeft,
+                    alignment:
+                        msg.isUser
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
                     child: Container(
                       padding: EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: msg.isUser
-                            ? Color(0xFF388E3C)
-                            : Color(0xFF424242),
+                        color:
+                            msg.isUser ? Color(0xFF388E3C) : Color(0xFF424242),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            "${msg.sender}${msg.id.isNotEmpty ? " [${msg.id}]" : ""}",
+                            "${msg.sender}${msg.id.isNotEmpty && msg.id != msg.sender ? " [${msg.id}]" : ""}",
                             style: TextStyle(
-                              color: Color(0xFF81C784),
+                              color: Colors.grey[700],
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
                             ),
@@ -1352,13 +1291,14 @@ class _ChatPageState extends State<ChatPage> {
                         child: Column(
                           children: [
                             CircleAvatar(
-                              backgroundColor: isSelected
-                                  ? Colors.blue
-                                  : _statusColor(
-                                          sender.status,
-                                          sender.unread,
-                                        ) ??
-                                        Colors.grey[700],
+                              backgroundColor:
+                                  isSelected
+                                      ? Colors.blue
+                                      : _statusColor(
+                                            sender.status,
+                                            sender.unread,
+                                          ) ??
+                                          Colors.grey[700],
                               radius: 14,
                               child: Text(
                                 sender.sender.isNotEmpty

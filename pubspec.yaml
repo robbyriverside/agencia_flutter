@@ -40,6 +40,8 @@ dependencies:
   google_fonts: ^6.2.1
   flutter_svg: ^2.0.7  
   web_socket_channel: ^2.4.0
+  agencia_dart:
+    path: ../agencia_dart
 
 
 dev_dependencies:
