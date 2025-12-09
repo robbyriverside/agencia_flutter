@@ -1,0 +1,27 @@
+version: '3'
+
+tasks:
+  build-macos:
+    desc: Build the MacOS executable and copy it to bin/agencia
+    cmds:
+      - flutter build macos --release
+      - mkdir -p bin
+      - rm -rf bin/Agencia.app bin/agencia
+      - mv build/macos/Build/Products/Release/Agencia.app bin/Agencia.app
+      - echo '#!/bin/sh' > bin/agencia
+      - echo 'exec "$(dirname "$0")/Agencia.app/Contents/MacOS/Agencia" "$@"' >> bin/agencia
+      - chmod +x bin/agencia
+      - echo "Build moved to bin/agencia.app and wrapper created at bin/agencia"
+
+  package-dmg:
+    desc: Package the MacOS executable into a DMG
+    deps: [build-macos]
+    cmds:
+      - rm -rf dist
+      - mkdir -p dist
+      - cp -r bin/Agencia.app dist/
+      - ln -s /Applications dist/Applications
+      - rm -f bin/Agencia.dmg
+      - hdiutil create -volname "Agencia" -srcfolder dist -ov -format UDZO bin/Agencia.dmg
+      - rm -rf dist
+      - echo "DMG created at bin/Agencia.dmg"
